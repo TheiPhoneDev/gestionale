@@ -1,0 +1,7 @@
+.smaller-cards-home {
+    display: flex;
+    justify-content: center;
+    justify-content: center;
+    flex-direction: row;
+    gap: 100px;
+}

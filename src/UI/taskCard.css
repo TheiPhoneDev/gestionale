@@ -1,0 +1,48 @@
+.task-card-home-container {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 105px;
+    width: 30%;
+    height: 300px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-direction: column;
+    gap: 50px;
+    padding: auto;
+}
+
+
+
+.taskcardTitle {
+    padding: 10px;
+    margin-top: 0;
+    padding-top: 10px ;
+    font-weight: bold;
+}
+
+
+
+.add-new-task {
+    text-decoration: none;
+    border: 0px;
+    border-radius: 15px;
+    padding: 20px;
+    gap: 30px;
+    color: #fff;
+    background-color: rgb(40, 40, 255);
+}
+
+.add-new-task i {
+    margin-right: 6px;
+
+}
+
+.modal-internal-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 50px;
+}
+
