@@ -5,11 +5,13 @@ import "bootstrap-icons/font/bootstrap-icons.min.css";
 import Modal from "./Modal";
 import React, { useState } from "react";
 import { teamMembers } from "./TeamMembers";
-import Dropdown from 'react-bootstrap/Dropdown';
+import Dropdown from "react-bootstrap/Dropdown";
 
 function TaskCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
+  const gestisciScelta = (eventKey) => {
+    alert(`Hai selezionato l'opzione: ${eventKey}`);
+  };
   return (
     <div className="task-card-home-container">
       <h2 className="taskcardTitle">Assegna Task</h2>
@@ -37,7 +39,21 @@ function TaskCard() {
             <input type="text" name="descrizioneInput" />
 
             <span>Assegna a:</span>
-            <input type="text" name="descrizioneInput" />
+            <Dropdown onSelect={gestisciScelta}>
+              <Dropdown.Toggle id="dropdown-eventi">
+                Seleziona membro
+              </Dropdown.Toggle>
+
+              <Dropdown.Menu>
+                {teamMembers.map((member) => {
+                  return(
+                    <Dropdown.Item key={member.id} eventKey={member.name}>
+                        {member.name}
+                    </Dropdown.Item>
+                  )
+                })}
+              </Dropdown.Menu>
+            </Dropdown>
 
           </label>
           <br />
