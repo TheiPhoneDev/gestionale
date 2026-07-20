@@ -4,6 +4,8 @@ import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 import Modal from "./Modal";
 import React, { useState } from "react";
+import { teamMembers } from "./TeamMembers";
+import Dropdown from 'react-bootstrap/Dropdown';
 
 function TaskCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +23,35 @@ function TaskCard() {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <div className="modal-internal-content">
           <h3>Nuovo Task</h3>
-          <p>Inserisci qui i dettagli del task da assegnare...</p>
+          <label class="MioContenitore">
+            <span>Titolo</span>
+            <input type="text" name="titleInput" />
+
+            <span>Descrizione</span>
+            <input type="text" name="descrizioneInput" />
+
+            <span>Priorità</span>
+            <input type="text" name="priorityInput" />
+
+            <span>Scadenza</span>
+            <input type="text" name="descrizioneInput" />
+
+            <span>Assegna a:</span>
+            <input type="text" name="descrizioneInput" />
+
+          </label>
+          <br />
+          <br />
+          <br />
+          <br />
+          <br />
+          <br />
+          <button
+            className="btn btn-primary"
+            onClick={() => setIsModalOpen(false)}
+          >
+            Crea
+          </button>
           <button
             className="btn btn-secondary"
             onClick={() => setIsModalOpen(false)}
