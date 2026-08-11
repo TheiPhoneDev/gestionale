@@ -2,12 +2,34 @@ import "../App.css";
 import "./sidebar.css";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 
-function Sidebar({activePage, onPageChange}) {
+function Sidebar({ activePage, onPageChange, currentUser }) {
   const [activeId, setActiveId] = useState("dashboard");
   const [progettiOpen, setProgettiOpen] = useState(false);
-  const progettoMenu = projects[0];
+  const [progettiList, setProgettiList] = useState([]);
+
+  useEffect(() => {
+    async function fetchProgetti() {
+      const { data, error } = await supabase
+        .from("progetti")
+        .select("id, nome, stato");
+
+      if (error) {
+        console.error("Errore nel caricamento dei progetti in Sidebar:", error);
+      } else if (data) {
+        setProgettiList(data);
+      }
+    }
+
+    fetchProgetti();
+  }, []);
+
+  // Nome da visualizzare nel footer della sidebar
+  const nomeUtente = currentUser
+    ? `${currentUser.nome || ""} ${currentUser.cognome || ""}`.trim() || currentUser.email
+    : "Accedi";
 
   return (
     <aside className="sidebar">
@@ -18,10 +40,9 @@ function Sidebar({activePage, onPageChange}) {
           return (
             <button
               key={item.id}
-              href={item.pageLink}
               onClick={() => {
-                setActiveId(item.id)
-                onPageChange(item.id)
+                setActiveId(item.id);
+                if (onPageChange) onPageChange(item.id);
               }}
               style={{
                 background: "none",
@@ -38,80 +59,108 @@ function Sidebar({activePage, onPageChange}) {
               <span style={{ marginRight: "8px" }}>{item.icon}</span>
               {item.label}
             </button>
-
           );
         })}
 
-        {/*Codice gestione pulsante progetti*/}
-         <button
-            className="sidebar-link"
-            onClick={() => {
-              setProgettiOpen(!progettiOpen);
-              setActiveId(progettoMenu.id);
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              width: "100%",
-              textAlign: "left",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              textDecoration: "none",
-              color:
-                progettiOpen || activeId === progettoMenu.id
-                  ? progettoMenu.color
-                  : progettoMenu.color2,
-            }}
-          >
-            <span className="sidebar-icon">{progettoMenu.icon}</span>
-            {progettoMenu.label}
-            <i
-              className={`bi bi-chevron-${progettiOpen ? "down" : "right"} ms-auto`}
-              style={{ marginLeft: "auto" }}
-            ></i>
-          </button>
+        {/* Pulsante Progetti */}
+        <button
+          className="sidebar-link"
+          onClick={() => setProgettiOpen(!progettiOpen)}
+          style={{
+            background: "none",
+            border: "none",
+            width: "100%",
+            textAlign: "left",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            textDecoration: "none",
+            color: progettiOpen || activeId.startsWith("progetto-") ? "#fff" : "#515151",
+          }}
+        >
+          <span className="sidebar-icon" style={{ marginRight: "8px" }}>
+            <i className="bi bi-tools"></i>
+          </span>
+          Progetti
+          <i
+            className={`bi bi-chevron-${progettiOpen ? "down" : "right"} ms-auto`}
+            style={{ marginLeft: "auto" }}
+          ></i>
+        </button>
 
-          {progettiOpen && (
-            <div className="sidebar-submenu">
-              {progettoMenu.subItems.map((subItem) => {
-                const isSubActive = activeId === subItem.id;
+        {/* Sottomenu Progetti */}
+        {progettiOpen && (
+          <div className="sidebar-submenu" style={{ paddingLeft: "15px" }}>
+            {progettiList.length === 0 ? (
+              <span style={{ color: "#888", fontSize: "0.85rem" }}>
+                Nessun progetto
+              </span>
+            ) : (
+              progettiList.map((progetto) => {
+                const isSubActive = activeId === `progetto-${progetto.id}`;
                 return (
-                  <a
-                    key={subItem.id}
-                    href={subItem.pageLink}
+                  <button
+                    key={progetto.id}
+                    onClick={() => {
+                      setActiveId(`progetto-${progetto.id}`);
+                      if (onPageChange) onPageChange(`progetto-${progetto.id}`);
+                    }}
                     className="sidebar-sublink"
-                    onClick={() => setActiveId(subItem.id)}
                     style={{
+                      background: "none",
+                      border: "none",
+                      width: "100%",
+                      textAlign: "left",
+                      cursor: "pointer",
                       textDecoration: "none",
-                      color: isSubActive ? subItem.color : subItem.color2,
+                      color: isSubActive ? "#fff" : "#515151",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
+                      padding: "4px 0",
                     }}
                   >
                     <span
                       className="status-dot"
                       style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
                         backgroundColor:
-                          subItem.status === "Open" ? "#10b981" : "#ef4444",
+                          progetto.stato === "in_corso" ? "#10b981" : "#ef4444",
                       }}
                     ></span>
-                    {subItem.label}
-                  </a>
+                    {progetto.nome}
+                  </button>
                 );
-              })}
-            </div>
-          )}
-
-      
+              })
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="sidebar-footer">
-        <span style={{ color: "#fff" }}>
-          <i className="bi bi-person-fill"></i>
+      {/* Footer Sidebar dinamico */}
+      <div
+        className="sidebar-footer"
+        onClick={() => {
+          if (onPageChange) onPageChange("profile");
+        }}
+        style={{
+          cursor: "pointer",
+          backgroundColor: activePage === "profile" ? "rgba(255, 255, 255, 0.15)" : "transparent",
+          padding: "10px",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          transition: "background 0.2s",
+        }}
+      >
+        <span style={{ color: "#fff", marginRight: "8px" }}>
+          <i className="bi bi-person-circle fs-5"></i>
         </span>
-        <span style={{ color: "#fff" }}>Mario Rossi</span>
+        <span style={{ color: "#fff", fontWeight: "bold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {nomeUtente}
+        </span>
       </div>
     </aside>
   );
@@ -124,15 +173,20 @@ const sidebarElements = [
     id: "dashboard",
     icon: <i className="bi bi-file-post"></i>,
     label: "Dashboard",
-    pageLink: "#dashboard",
     color: "#fff",
     color2: "#515151",
   },
   {
     id: "task",
-    icon: <i class="bi bi-list-task"></i>,
+    icon: <i className="bi bi-list-task"></i>,
     label: "Task",
-    pageLink: "#task",
+    color: "#fff",
+    color2: "#515151",
+  },
+  {
+    id: "clienti",
+    icon: <i className="bi bi-people-fill"></i>, // Icona per i Clienti
+    label: "Clienti",
     color: "#fff",
     color2: "#515151",
   },
@@ -140,53 +194,7 @@ const sidebarElements = [
     id: "ganttChart",
     icon: <i className="bi bi-clipboard2-data-fill"></i>,
     label: "Diagramma Gantt",
-    pageLink: "#gantt",
     color: "#fff",
     color2: "#515151",
-  },
-];
-
-const projects = [
-  {
-    id: "progetti",
-    icon: <i className="bi bi-tools"></i>,
-    label: "Progetti",
-    pageLink: "#gantt",
-    color: "#fff",
-    color2: "#515151",
-    subItems: [
-      {
-        id: "idProgetto1",
-        label: "Sito web 1",
-        pageLink: "#idProgetto1",
-        color: "#fff",
-        color2: "#515151",
-        status: "Open",
-      },
-      {
-        id: "idProgetto2",
-        label: "App Mobile",
-        pageLink: "#idProgetto2",
-        color: "#fff",
-        color2: "#515151",
-        status: "Closed",
-      },
-      {
-        id: "idProgetto3",
-        label: "React Website",
-        pageLink: "#idProgetto3",
-        color: "#fff",
-        color2: "#515151",
-        status: "Closed",
-      },
-      {
-        id: "idProgetto4",
-        label: "Branding",
-        pageLink: "#idProgetto4",
-        color: "#fff",
-        color2: "#515151",
-        status: "Open",
-      },
-    ],
   },
 ];

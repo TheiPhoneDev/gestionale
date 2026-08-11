@@ -1,7 +1,82 @@
-.smaller-cards-home {
-    display: flex;
-    justify-content: center;
-    justify-content: center;
-    flex-direction: row;
-    gap: 100px;
+.dashboard-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dashboard-title {
+  font-size: 1.75rem;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.dashboard-section {
+  margin-bottom: 20px;
+}
+
+/* Griglia responsive a 3 colonne per desktop, 2 per tablet, 1 per mobile */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+/* Stile compatto per tutte le card della griglia */
+.task-card-home-container,
+.perf-card-home-container,
+.sett-card-home-container,
+.project-card-home-container,
+.client-card-home-container {
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #eaecf0;
+  width: 100%;
+  height: 180px; /* Altezza ridotta e contenuta */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+/* Titolo delle card più piccolo */
+.taskcardTitle,
+.perfcardTitle,
+.settcardTitle,
+.projectcardTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  color: #1e293b;
+}
+
+/* Pulsanti più compatti */
+.add-new-task,
+.goToperfBtn,
+.goTosettBtn,
+.add-new-project {
+  font-size: 0.85rem;
+  padding: 8px 16px;
+    border-radius: 25px;
+  border: none;
+  background-color: #2828ff;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.add-new-task:hover,
+.goToperfBtn:hover,
+.goTosettBtn:hover,
+.add-new-project:hover {
+  background-color: #1a1aff;
 }

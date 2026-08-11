@@ -6,21 +6,29 @@ import CardHome from './cardHome';
 import TaskCard from './taskCard';
 import PerformanceCard from "./performaceCard";
 import SettingsCard from "./SettingsCard";
+import ProjectCard from "./ProjectCard";
+import ClientCard from "./ClientCard";
 
 function Dashboard() {
-    return(
-        <div>
-            <h1>Dashboard</h1>
-            <br />
-            <CardHome />
-            <br />
-            <div className="smaller-cards-home">
-                <TaskCard />
-                <PerformanceCard />
-                <SettingsCard />
-            </div>
-        </div>
-    )
+  return (
+    <div className="dashboard-container">
+      <h1 className="dashboard-title">Dashboard</h1>
+
+      {/* Card principale Team (in alto a larghezza piena) */}
+      <div className="dashboard-section">
+        <CardHome />
+      </div>
+
+      {/* Griglia per le card più piccole */}
+      <div className="dashboard-grid">
+        <TaskCard />
+        <PerformanceCard />
+        <SettingsCard />
+        <ClientCard />
+        <ProjectCard />
+      </div>
+    </div>
+  );
 }
 
-export default Dashboard
+export default Dashboard;

@@ -2,6 +2,8 @@ import "../App.css";
 import "./SettingsCard.css";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
+import "./dashboard.css"; // Importa il CSS specifico per la dashboard
+
 
 function SettingsCard() {
     return(
