@@ -548,16 +548,20 @@ function TaskPage({ projectId }) {
               </div>
             </div>
 
+            {/* Azioni Modale con Stile Add-New-Task */}
             <div className="modal-actions mt-3 d-flex justify-content-end gap-2">
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="add-new-task"
+                style={{ backgroundColor: "#dc3545", borderColor: "#dc3545" }}
                 onClick={() => setIsModalOpen(false)}
               >
-                Annulla
+                <b>Annulla</b>
               </button>
-              <button type="submit" className="btn btn-primary">
-                {selectedTask ? "Salva Modifiche" : "Crea Task"}
+              <button type="submit" className="add-new-task">
+                <b>
+                  {selectedTask ? "Salva Modifiche" : "Crea Task"}
+                </b>
               </button>
             </div>
           </form>

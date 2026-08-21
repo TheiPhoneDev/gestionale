@@ -7,14 +7,13 @@
   justify-content: space-between;
   padding: 24px 16px;
   
-  /* Posizionamento fisso full-height ancorato in alto a sinistra */
+  /* Posizionamento ancorato sotto l'header */
   position: fixed;
-  top: 0;
+  top: 60px;
   left: 0;
-  height: 100vh;
-  z-index: 1100; /* Priorità visiva sopra l'header */
+  height: calc(100vh - 60px);
+  z-index: 990; /* Inferiore all'Header (1000) e ai Modal (2000+) */
   
-  /* Reset dei margini per eliminare spazi vuoti */
   margin: 0;
   box-sizing: border-box;
 }
@@ -25,7 +24,6 @@
   gap: 18px;
   padding: 10px;
 }
-
 
 .sidebar-link:hover {
   background-color: #1e293b;
@@ -46,15 +44,14 @@
   gap: 8px;
 }
 
-.sidebar-footer span{
-    font-size: large;
+.sidebar-footer span {
+  font-size: large;
 }
 
 .sidebar-icon {
   margin-right: 10px;
   display: inline-flex;
   align-items: center;
-  
 }
 
 .sidebar-submenu {
@@ -77,4 +74,3 @@
   border-radius: 50%;
   display: inline-block;
 }
-
