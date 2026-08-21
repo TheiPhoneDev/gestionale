@@ -1,5 +1,6 @@
 import "../App.css";
 import "./cardHome.css";
+import "./taskCard.css"; // Importato per ereditare lo stile add-new-task
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 import React, { useState, useEffect } from "react";
@@ -176,8 +177,8 @@ function CardHome() {
         </div>
       )}
 
-      {/* Pulsante per aprire la modale */}
-      <button className="add-new-member" onClick={() => setIsModalOpen(true)}>
+      {/* Pulsante per aprire la modale con lo stile add-new-task */}
+      <button className="add-new-task" onClick={() => setIsModalOpen(true)}>
         <b>
           Gestisci team <i className="bi bi-person-plus-fill ms-1"></i>
         </b>
@@ -257,16 +258,19 @@ function CardHome() {
               </select>
             </div>
 
-            <div className="modal-actions mt-3 full-width">
-              <button type="submit" className="btn btn-primary">
-                Salva e Registra
-              </button>
+            <div className="d-flex justify-content-end gap-2 mt-4 full-width">
+              {/* Pulsante Annulla rosso con stile add-new-task */}
               <button
                 type="button"
-                className="btn btn-custom-cancel"
+                className="add-new-task"
+                style={{ backgroundColor: "#dc3545", color: "#fff" }}
                 onClick={() => setIsModalOpen(false)}
               >
-                Annulla
+                <b>Annulla</b>
+              </button>
+              {/* Pulsante di conferma della modale con stile add-new-task */}
+              <button type="submit" className="add-new-task">
+                <b>Salva e Registra</b>
               </button>
             </div>
           </form>

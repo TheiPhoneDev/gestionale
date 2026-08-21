@@ -1,5 +1,4 @@
 import "../App.css";
-// Riutilizza lo stesso CSS delle altre card
 import "./taskCard.css"; 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
@@ -10,7 +9,6 @@ import { supabase } from "../supabaseClient";
 function ClientCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Stato per i campi del form del cliente
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
@@ -18,13 +16,11 @@ function ClientCard() {
     azienda: "",
   });
 
-  // Gestione dell'input del form
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Invio dei dati alla tabella 'clienti' di Supabase
   const handleSubmit = async () => {
     if (!formData.nome) {
       alert("Inserisci almeno il nome del cliente");
@@ -62,13 +58,15 @@ function ClientCard() {
     <div className="task-card-home-container">
       <h2 className="taskcardTitle">Gestione Clienti</h2>
       <p>Aggiungi e gestisci la tua anagrafica clienti</p>
+      
+      {/* Pulsante principale */}
       <button 
         className="add-new-task" 
         onClick={() => setIsModalOpen(true)}
-        style={{ backgroundColor: 'rgb(40, 40, 255)' }} /* Colore verde Bootstrap per distinguere dai progetti/task */
+        style={{ backgroundColor: 'rgb(40, 40, 255)' }}
       >
         <b>
-          <i className="bi bi-person-plus-fill"></i> Nuovo Cliente
+          <i className="bi bi-person-plus-fill me-1"></i> Nuovo Cliente
         </b>
       </button>
 
@@ -77,7 +75,6 @@ function ClientCard() {
           <h3 className="modal-title">Nuovo Cliente</h3>
 
           <div className="MioContenitore">
-            {/* Nome / Referente */}
             <div className="form-group">
               <span>Nome / Referente *</span>
               <input
@@ -90,7 +87,6 @@ function ClientCard() {
               />
             </div>
 
-            {/* Azienda */}
             <div className="form-group">
               <span>Azienda</span>
               <input
@@ -103,7 +99,6 @@ function ClientCard() {
               />
             </div>
 
-            {/* Email */}
             <div className="form-group">
               <span>Email</span>
               <input
@@ -116,7 +111,6 @@ function ClientCard() {
               />
             </div>
 
-            {/* Telefono */}
             <div className="form-group">
               <span>Telefono</span>
               <input
@@ -130,12 +124,22 @@ function ClientCard() {
             </div>
           </div>
 
-          <div className="modal-actions">
-            <button className="btn btn-success" onClick={handleSubmit} style={{ backgroundColor: 'rgb(40, 40, 255)' }}>
-              Salva Cliente
+          <div className="d-flex justify-content-end gap-2 mt-4 full-width">
+            {/* Pulsante Annulla rosso */}
+            <button 
+              className="add-new-task" 
+              style={{ backgroundColor: "#dc3545", color: "#fff" }}
+              onClick={() => setIsModalOpen(false)}
+            >
+              <b>Annulla</b>
             </button>
-            <button className="btn btn-custom-cancel" onClick={() => setIsModalOpen(false)}>
-              Annulla
+            {/* Pulsante di conferma */}
+            <button 
+              className="add-new-task" 
+              onClick={handleSubmit} 
+              style={{ backgroundColor: 'rgb(40, 40, 255)', color: '#fff' }}
+            >
+              <b>Salva Cliente</b>
             </button>
           </div>
         </div>

@@ -6,11 +6,17 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 24px 16px;
-  height: calc(100vh - 60px); 
-  position: sticky;
-  top: 60px;
+  
+  /* Posizionamento fisso full-height ancorato in alto a sinistra */
   position: fixed;
-  margin-top: 15px;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 1100; /* Priorità visiva sopra l'header */
+  
+  /* Reset dei margini per eliminare spazi vuoti */
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .sidebar-menu {

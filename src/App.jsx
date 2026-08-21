@@ -12,12 +12,29 @@ import TaskPage from "./UI/TaskPage";
 import ProfilePage from "./UI/ProfilePage";
 import LoginPage from "./UI/LoginPage";
 import ClientsPage from "./UI/ClientsPage";
+import TeamManagement from "./UI/TeamManagement";
+import Performance from "./UI/Performance";
 
 function App() {
   const [paginaMostrata, selezionaPaginaMostrata] = useState("dashboard");
   const [session, setSession] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  // Stato per gestire il blocco mobile
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Controllo dimensioni schermo per bloccare i dispositivi mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile(); // Esegue il controllo al caricamento
+    window.addEventListener("resize", checkMobile); // Rileva il ridimensionamento
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Carica il profilo dell'utente loggato dalla tabella 'profili'
   const loadUserProfile = async (user) => {
@@ -70,6 +87,23 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Schermata di blocco per Dispositivi Mobile
+  if (isMobile) {
+    return (
+      <div className="d-flex flex-column justify-content-center align-items-center vh-100 text-center p-4 bg-light">
+        <div className="card shadow border-0 p-4 max-w-md rounded-4" style={{ maxWidth: "400px" }}>
+          <div className="text-primary mb-3">
+            <i className="bi bi-display fs-1"></i>
+          </div>
+          <h3 className="fw-bold mb-2">Dispositivo non supportato</h3>
+          <p className="text-muted mb-0">
+            Questa applicazione è ottimizzata esclusivamente per schermi Desktop. Si prega di accedere da un computer per continuare ad utilizzare la piattaforma.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Se l'autenticazione è in fase di caricamento
   if (loadingAuth) {
     return (
@@ -107,6 +141,10 @@ function App() {
         return <ClientsPage />;
       case "ganttChart":
         return <Gantt />;
+      case "team":
+        return <TeamManagement />;
+      case "performance":
+        return <Performance />;
       case "profile":
         return (
           <ProfilePage

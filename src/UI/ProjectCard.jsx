@@ -1,5 +1,4 @@
 import "../App.css";
-// Puoi riutilizzare lo stesso CSS dei task o crearne uno specifico
 import "./taskCard.css"; 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
@@ -7,16 +6,13 @@ import Modal from "./Modal";
 import React, { useState, useEffect } from "react";
 import Dropdown from "react-bootstrap/Dropdown";
 import { supabase } from "../supabaseClient";
-import "./ProjectCard.css"; // Importa il CSS specifico per ProjectCard
-import "./dashboard.css"; // Importa il CSS specifico per la dashboard
+import "./ProjectCard.css";
+import "./dashboard.css";
 
 function ProjectCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Stato per caricare i clienti nel dropdown
   const [clienti, setClienti] = useState([]);
 
-  // Stato per il form del progetto
   const [formData, setFormData] = useState({
     nome: "",
     descrizione: "",
@@ -24,10 +20,8 @@ function ProjectCard() {
     cliente_id: "",
   });
 
-  // Etichetta visiva per il dropdown cliente
   const [selectedClientLabel, setSelectedClientLabel] = useState("Seleziona cliente");
 
-  // Carica i clienti quando si apre la modale
   useEffect(() => {
     async function loadClients() {
       const { data, error } = await supabase
@@ -89,9 +83,11 @@ function ProjectCard() {
     <div className="task-card-home-container">
       <h2 className="taskcardTitle">Gestione Progetti</h2>
       <p>Crea nuovi progetti e assegnali ai clienti</p>
+      
+      {/* Pulsante principale */}
       <button className="add-new-task" onClick={() => setIsModalOpen(true)}>
         <b>
-          <i className="bi bi-folder-plus"></i> Nuovo Progetto
+          <i className="bi bi-folder-plus me-1"></i> Nuovo Progetto
         </b>
       </button>
 
@@ -100,7 +96,6 @@ function ProjectCard() {
           <h3 className="modal-title">Nuovo Progetto</h3>
 
           <div className="MioContenitore">
-            {/* Nome Progetto */}
             <div className="form-group">
               <span>Nome Progetto</span>
               <input
@@ -113,7 +108,6 @@ function ProjectCard() {
               />
             </div>
 
-            {/* Stato */}
             <div className="form-group">
               <span>Stato</span>
               <select
@@ -128,7 +122,6 @@ function ProjectCard() {
               </select>
             </div>
 
-            {/* Dropdown Cliente */}
             <div className="form-group">
               <span>Cliente</span>
               <Dropdown className="w-100">
@@ -155,7 +148,6 @@ function ProjectCard() {
               </Dropdown>
             </div>
 
-            {/* Descrizione */}
             <div className="form-group full-width">
               <span>Descrizione Progetto</span>
               <textarea
@@ -169,12 +161,18 @@ function ProjectCard() {
             </div>
           </div>
 
-          <div className="modal-actions">
-            <button className="btn btn-primary" onClick={handleSubmit}>
-              Salva Progetto
+          <div className="d-flex justify-content-end gap-2 mt-4 full-width">
+            {/* Pulsante Annulla rosso */}
+            <button 
+              className="add-new-task" 
+              style={{ backgroundColor: "#dc3545", color: "#fff" }}
+              onClick={() => setIsModalOpen(false)}
+            >
+              <b>Annulla</b>
             </button>
-            <button className="btn btn-custom-cancel" onClick={() => setIsModalOpen(false)}>
-              Annulla
+            {/* Pulsante di conferma */}
+            <button className="add-new-task" onClick={handleSubmit}>
+              <b>Salva Progetto</b>
             </button>
           </div>
         </div>

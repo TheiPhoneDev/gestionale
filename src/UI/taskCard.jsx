@@ -6,20 +6,14 @@ import Modal from "./Modal";
 import React, { useState, useEffect } from "react";
 import Dropdown from "react-bootstrap/Dropdown";
 import { supabase } from "../supabaseClient";
-import "./dashboard.css"; // Importa il CSS specifico per la dashboard
-
+import "./dashboard.css";
 
 function TaskCard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Stati per i dati da caricare da Supabase
   const [utenti, setUtenti] = useState([]);
   const [progetti, setProgetti] = useState([]);
-
-  // Stato per la selezione multipla dei membri assegnati
   const [selectedProfili, setSelectedProfili] = useState([]);
 
-  // Stato per i restanti campi del form
   const [formData, setFormData] = useState({
     titolo: "",
     priorita: "Media",
@@ -28,13 +22,10 @@ function TaskCard() {
     descrizione: "",
   });
 
-  // Etichetta visiva per la selezione del progetto
   const [selectedProjectLabel, setSelectedProjectLabel] = useState("Seleziona progetto");
 
-  // Fetch dei membri del team e dei progetti all'apertura della modale
   useEffect(() => {
     async function loadDropdownData() {
-      // 1. Carica lista progetti
       const { data: progettiData, error: projErr } = await supabase
         .from("progetti")
         .select("id, nome");
@@ -42,7 +33,6 @@ function TaskCard() {
       if (projErr) console.error("Errore Progetti:", projErr);
       else if (progettiData) setProgetti(progettiData);
 
-      // 2. Carica lista utenti dalla tabella 'profili'
       const { data: utentiData, error: userErr } = await supabase
         .from("profili")
         .select("id, nome, cognome, ruolo");
@@ -59,13 +49,11 @@ function TaskCard() {
     }
   }, [isModalOpen]);
 
-  // Gestione degli input di testo e data
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Funzione per selezionare / deselezionare un membro del team
   const toggleProfilo = (profiloId) => {
     setSelectedProfili((prev) =>
       prev.includes(profiloId)
@@ -74,14 +62,12 @@ function TaskCard() {
     );
   };
 
-  // Invio dei dati a Supabase
   const handleSubmit = async () => {
     if (!formData.titolo) {
       alert("Inserisci almeno il titolo del task");
       return;
     }
 
-    // 1. Inserisci il task nella tabella 'task'
     const { data: newTask, error: taskError } = await supabase
       .from("task")
       .insert([
@@ -102,7 +88,6 @@ function TaskCard() {
       return;
     }
 
-    // 2. Se ci sono persone selezionate, inserisci le relazioni nella tabella 'task_profili'
     if (newTask && selectedProfili.length > 0) {
       const assegnazioni = selectedProfili.map((profiloId) => ({
         task_id: newTask.id,
@@ -140,9 +125,11 @@ function TaskCard() {
     <div className="task-card-home-container">
       <h2 className="taskcardTitle">Assegna Task</h2>
       <p>Crea e assegna task ai membri del team</p>
+
+      {/* Pulsante principale */}
       <button className="add-new-task" onClick={() => setIsModalOpen(true)}>
         <b>
-          <i className="bi bi-plus"></i>
+          <i className="bi bi-plus me-1"></i>
           Crea e assegna
         </b>
       </button>
@@ -152,7 +139,6 @@ function TaskCard() {
           <h3 className="modal-title">Nuovo Task</h3>
 
           <div className="MioContenitore">
-            {/* Titolo */}
             <div className="form-group">
               <span>Titolo *</span>
               <input
@@ -164,7 +150,6 @@ function TaskCard() {
               />
             </div>
 
-            {/* Priorità */}
             <div className="form-group">
               <span>Priorità</span>
               <select
@@ -179,7 +164,6 @@ function TaskCard() {
               </select>
             </div>
 
-            {/* Scadenza */}
             <div className="form-group">
               <span>Scadenza</span>
               <input
@@ -191,7 +175,6 @@ function TaskCard() {
               />
             </div>
 
-            {/* Dropdown Progetto */}
             <div className="form-group">
               <span>Progetto</span>
               <Dropdown className="w-100">
@@ -218,7 +201,6 @@ function TaskCard() {
               </Dropdown>
             </div>
 
-            {/* Selezione Multipla Assegna a */}
             <div className="form-group full-width">
               <span className="mb-2 d-block">Assegna a (seleziona uno o più membri):</span>
               <div className="d-flex flex-wrap gap-2 p-2 border rounded bg-light">
@@ -249,7 +231,6 @@ function TaskCard() {
               </div>
             </div>
 
-            {/* Descrizione */}
             <div className="form-group full-width">
               <span>Descrizione</span>
               <textarea
@@ -262,12 +243,18 @@ function TaskCard() {
             </div>
           </div>
 
-          <div className="modal-actions mt-3">
-            <button className="btn btn-custom-create" onClick={handleSubmit}>
-              Crea
+          <div className="d-flex justify-content-end gap-2 mt-4 full-width">
+            {/* Pulsante Annulla rosso */}
+            <button 
+              className="add-new-task" 
+              style={{ backgroundColor: "#dc3545", color: "#fff" }}
+              onClick={() => setIsModalOpen(false)}
+            >
+              <b>Annulla</b>
             </button>
-            <button className="btn btn-custom-cancel" onClick={() => setIsModalOpen(false)}>
-              Annulla
+            {/* Pulsante di conferma */}
+            <button className="add-new-task" onClick={handleSubmit}>
+              <b>Crea Task</b>
             </button>
           </div>
         </div>

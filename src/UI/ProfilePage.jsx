@@ -1,5 +1,6 @@
 import React from "react";
 import { supabase } from "../supabaseClient";
+import "./taskCard.css"; // Importato per usare la classe add-new-task
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 
@@ -66,8 +67,15 @@ function ProfilePage({ currentUser, onLogout }) {
         </div>
 
         <div className="mt-4 pt-3 border-top d-flex justify-content-end">
-          <button className="btn btn-outline-danger" onClick={handleLogout}>
-            <i className="bi bi-box-arrow-right me-2"></i> Esci dall'account
+          {/* Bottone di Logout coordinato con la classe add-new-task */}
+          <button
+            className="add-new-task"
+            style={{ backgroundColor: "#dc3545", color: "#fff" }}
+            onClick={handleLogout}
+          >
+            <b>
+              <i className="bi bi-box-arrow-right me-1"></i> Esci dall'account
+            </b>
           </button>
         </div>
       </div>
