@@ -7,6 +7,8 @@ import "bootstrap-icons/font/bootstrap-icons.min.css";
 
 function Performance() {
   const [stats, setStats] = useState([]);
+  const [projectStats, setProjectStats] = useState([]);
+  const [incompleteTasks, setIncompleteTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Palette di colori per i cerchi delle iniziali
@@ -15,7 +17,6 @@ function Performance() {
     "#ec4899", "#06b6d4", "#f97316", "#6366f1"
   ];
 
-  // Funzione helper per estrarre le iniziali dal nome
   const getInitials = (nome, cognome) => {
     const n = (nome || "").trim().charAt(0);
     const c = (cognome || "").trim().charAt(0);
@@ -23,7 +24,6 @@ function Performance() {
     return `${n}${c}`.toUpperCase();
   };
 
-  // Funzione per assegnare un colore coerente in base all'index
   const getColor = (index) => {
     return avatarColors[index % avatarColors.length];
   };
@@ -31,6 +31,7 @@ function Performance() {
   const fetchPerformanceData = async () => {
     setLoading(true);
 
+    // 1. Fetch Profili
     const { data: profili, error: profiliError } = await supabase
       .from("profili")
       .select("id, nome, cognome, ruolo");
@@ -41,6 +42,7 @@ function Performance() {
       return;
     }
 
+    // 2. Fetch Task e Task_Profili per i membri
     const { data: taskProfili, error: tpError } = await supabase
       .from("task_profili")
       .select("profilo_id, task(id, stato, scadenza)");
@@ -51,8 +53,34 @@ function Performance() {
       return;
     }
 
+    // 3. Fetch Progetti con i relativi Task e Clienti (per l'azienda)
+    const { data: progetti, error: progettiError } = await supabase
+      .from("progetti")
+      .select(`
+        id,
+        nome,
+        stato,
+        clienti ( nome, azienda ),
+        task (
+          id,
+          titolo,
+          stato,
+          created_at,
+          scadenza,
+          progetti ( id, nome ),
+          task_profili (
+            profili ( id, nome, cognome )
+          )
+        )
+      `);
+
+    if (progettiError) {
+      console.error("Errore recupero progetti:", progettiError);
+    }
+
     const oraAttuale = new Date();
 
+    // A. Elaborazione Statistiche Membri
     const performanceData = profili.map((p) => {
       const assegnazioni = taskProfili.filter((tp) => tp.profilo_id === p.id);
       const userTasks = assegnazioni.map((tp) => tp.task).filter(Boolean);
@@ -92,7 +120,66 @@ function Performance() {
       };
     });
 
+    // B. Elaborazione Statistiche Progetti & Task Incompleti
+    const progettiDataFormatted = [];
+    const tuttiTaskIncompleti = [];
+
+    (progetti || []).forEach((proj) => {
+      const taskDelProgetto = proj.task || [];
+      const totaliTask = taskDelProgetto.length;
+      const completatiTask = taskDelProgetto.filter(
+        (t) => (t.stato || "").toLowerCase() === "done" || (t.stato || "").toLowerCase() === "completato"
+      ).length;
+
+      const avanzamento = totaliTask > 0 ? Math.round((completatiTask / totaliTask) * 100) : 0;
+
+      const membriSet = new Map();
+      taskDelProgetto.forEach((t) => {
+        // Cerca task non completati (stato diverso da done/completato)
+        const statoTask = (t.stato || "").toLowerCase();
+        if (statoTask !== "done" && statoTask !== "completato") {
+          const dataCreazione = t.created_at ? new Date(t.created_at) : new Date();
+          const giorniAperti = Math.floor((oraAttuale - dataCreazione) / (1000 * 60 * 60 * 24));
+
+          const membriAssegnati = t.task_profili
+            ? t.task_profili.map((tp) => tp.profili).filter(Boolean)
+            : [];
+
+          tuttiTaskIncompleti.push({
+            id: t.id,
+            titolo: t.titolo || "Senza titolo",
+            stato: t.stato || "todo",
+            progettoNome: proj.nome,
+            giorniAperti: giorniAperti >= 0 ? giorniAperti : 0,
+            dataCreazione: t.created_at ? new Date(t.created_at).toLocaleDateString("it-IT") : "-",
+            membriAssegnati,
+          });
+        }
+
+        if (t.task_profili) {
+          t.task_profili.forEach((tp) => {
+            if (tp.profili) {
+              membriSet.set(tp.profili.id, tp.profili);
+            }
+          });
+        }
+      });
+
+      progettiDataFormatted.push({
+        id: proj.id,
+        nome: proj.nome,
+        cliente: proj.clienti?.azienda || proj.clienti?.nome || "Cliente Privato / NESSUNO",
+        statoProgetto: proj.stato || "In corso",
+        totaliTask,
+        completatiTask,
+        avanzamento,
+        membriCoinvolti: Array.from(membriSet.values()),
+      });
+    });
+
     setStats(performanceData);
+    setProjectStats(progettiDataFormatted);
+    setIncompleteTasks(tuttiTaskIncompleti);
     setLoading(false);
   };
 
@@ -100,7 +187,6 @@ function Performance() {
     fetchPerformanceData();
   }, []);
 
-  // Classifica ordinata per performance
   const leaderboard = [...stats].sort((a, b) => {
     if (b.tassoCompletamento !== a.tassoCompletamento) {
       return b.tassoCompletamento - a.tassoCompletamento;
@@ -111,7 +197,9 @@ function Performance() {
     return a.inRitardo - b.inRitardo;
   });
 
-  // Badge numerici colorati per il podio (senza icone)
+  const progettiOrdinati = [...projectStats].sort((a, b) => b.avanzamento - a.avanzamento);
+  const taskIncompletiOrdinati = [...incompleteTasks].sort((a, b) => b.giorniAperti - a.giorniAperti);
+
   const renderRankBadge = (rank) => {
     switch (rank) {
       case 0:
@@ -119,7 +207,6 @@ function Performance() {
           <span
             className="badge rounded-circle text-dark d-inline-flex align-items-center justify-content-center fw-bold shadow-sm"
             style={{ width: "32px", height: "32px", backgroundColor: "#f59e0b", fontSize: "0.95rem" }}
-            title="1° Posto"
           >
             1
           </span>
@@ -129,7 +216,6 @@ function Performance() {
           <span
             className="badge rounded-circle text-dark d-inline-flex align-items-center justify-content-center fw-bold shadow-sm"
             style={{ width: "32px", height: "32px", backgroundColor: "#9ca3af", fontSize: "0.95rem" }}
-            title="2° Posto"
           >
             2
           </span>
@@ -139,7 +225,6 @@ function Performance() {
           <span
             className="badge rounded-circle text-white d-inline-flex align-items-center justify-content-center fw-bold shadow-sm"
             style={{ width: "32px", height: "32px", backgroundColor: "#b45309", fontSize: "0.95rem" }}
-            title="3° Posto"
           >
             3
           </span>
@@ -164,15 +249,165 @@ function Performance() {
             <span className="visually-hidden">Caricamento...</span>
           </div>
         </div>
-      ) : stats.length === 0 ? (
-        <div className="alert alert-info">Nessun dipendente trovato nel sistema.</div>
       ) : (
         <>
-          {/* Sezione Classifica */}
+          {/* SEZIONE 1: KPI PROGETTI */}
           <div className="card shadow-sm border-0 rounded-4 mb-5 p-4 bg-white">
-            <h4 className="fw-bold mb-4">
-              Classifica Top Performer
-            </h4>
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <h4 className="fw-bold mb-0">Performance Progetti</h4>
+              <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill">
+                Monitoraggio Avanzamento
+              </span>
+            </div>
+
+            {progettiOrdinati.length === 0 ? (
+              <div className="alert alert-light text-muted">Nessun progetto trovato.</div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: "70px" }}>Rank</th>
+                      <th>Progetto & Cliente</th>
+                      <th className="text-center">Task (Completati / Tot)</th>
+                      <th>Membri del Team Coinvolti</th>
+                      <th className="text-center" style={{ width: "180px" }}>Avanzamento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {progettiOrdinati.map((proj, index) => (
+                      <tr key={proj.id}>
+                        <td>
+                          <div className="d-flex align-items-center justify-content-center fw-bold">
+                            {renderRankBadge(index)}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="fw-bold text-dark">{proj.nome}</div>
+                          <small className="text-muted">
+                            <i className="bi bi-building me-1"></i>
+                            {proj.cliente}
+                          </small>
+                        </td>
+                        <td className="text-center fw-semibold text-success">
+                          {proj.completatiTask} / {proj.totaliTask}
+                        </td>
+                        <td>
+                          {proj.membriCoinvolti.length === 0 ? (
+                            <span className="text-muted small">Nessun membro assegnato</span>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-1">
+                              {proj.membriCoinvolti.map((m, mIdx) => (
+                                <span
+                                  key={m.id || mIdx}
+                                  className="badge bg-light text-dark border px-2 py-1"
+                                  title={`${m.nome} ${m.cognome}`}
+                                >
+                                  {m.nome} {m.cognome}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="text-center">
+                          <div className="d-flex align-items-center gap-2">
+                            <div className="progress flex-grow-1" style={{ height: "8px" }}>
+                              <div
+                                className={`progress-bar ${
+                                  proj.avanzamento >= 80
+                                    ? "bg-success"
+                                    : proj.avanzamento >= 40
+                                    ? "bg-warning"
+                                    : "bg-secondary"
+                                }`}
+                                role="progressbar"
+                                style={{ width: `${proj.avanzamento}%` }}
+                              ></div>
+                            </div>
+                            <span className="small fw-bold">{proj.avanzamento}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* SEZIONE 2: TASK INCOMPLETI E GIORNI DALLA CREAZIONE */}
+          <div className="card shadow-sm border-0 rounded-4 mb-5 p-4 bg-white">
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <h4 className="fw-bold mb-0">Task Incompleti (Tempo dalla Creazione)</h4>
+              <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 rounded-pill">
+                Da Smaltire
+              </span>
+            </div>
+
+            {taskIncompletiOrdinati.length === 0 ? (
+              <div className="alert alert-success border-0 rounded-3">
+                Ottimo! Non ci sono task incompleti nel sistema. Tutti i task sono stati completati!
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Task</th>
+                      <th>Progetto</th>
+                      <th>Membri Assegnati</th>
+                      <th className="text-center">Data Creazione</th>
+                      <th className="text-center">Giorni Aperti</th>
+                      <th className="text-center">Stato</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taskIncompletiOrdinati.map((t) => (
+                      <tr key={t.id}>
+                        <td>
+                          <strong>{t.titolo}</strong>
+                        </td>
+                        <td>
+                          <span className="badge bg-light text-dark border px-2 py-1">
+                            <i className="bi bi-folder me-1"></i>
+                            {t.progettoNome}
+                          </span>
+                        </td>
+                        <td>
+                          {t.membriAssegnati.length === 0 ? (
+                            <span className="text-muted small">Non assegnato</span>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-1">
+                              {t.membriAssegnati.map((m, mIdx) => (
+                                <span key={m.id || mIdx} className="badge bg-secondary-subtle text-secondary px-2 py-1">
+                                  {m.nome} {m.cognome}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="text-center text-muted small">
+                          {t.dataCreazione}
+                        </td>
+                        <td className="text-center fw-bold text-danger">
+                          {t.giorniAperti} giorni
+                        </td>
+                        <td className="text-center">
+                          <span className="badge bg-warning-subtle text-warning-emphasis border px-2 py-1 text-uppercase">
+                            {t.stato}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* SEZIONE 3: CLASSIFICA MEMBRI */}
+          <div className="card shadow-sm border-0 rounded-4 mb-5 p-4 bg-white">
+            <h4 className="fw-bold mb-4">Classifica Top Performer (Membri)</h4>
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
                 <thead className="table-light">
@@ -227,7 +462,7 @@ function Performance() {
             </div>
           </div>
 
-          {/* Sezione Schede Singole */}
+          {/* SEZIONE 4: SCHEDE DI DETTAGLIO SINGOLI MEMBRI (Ripristinate) */}
           <h4 className="fw-bold mb-3">Dettaglio Membri</h4>
           <div className="row g-4">
             {stats.map((p, index) => (

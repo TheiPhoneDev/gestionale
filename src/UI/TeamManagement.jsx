@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../supabaseClient";
 import Modal from "./Modal";
 import "../App.css";
-import "./taskCard.css"; // Importato per ereditare lo stile add-new-task
+import "./taskCard.css";
+import "./TeamManagement.css";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 
@@ -48,6 +49,14 @@ function TeamManagement() {
     fetchTeam();
   }, []);
 
+  // Conteggio totale e per ruolo
+  const totaleMembri = team.length;
+  const conteggioRuoli = team.reduce((acc, member) => {
+    const ruolo = member.ruolo || "Membro";
+    acc[ruolo] = (acc[ruolo] || 0) + 1;
+    return acc;
+  }, {});
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -81,17 +90,20 @@ function TeamManagement() {
     e.preventDefault();
 
     if (editingMember) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profili")
         .update({
           nome: formData.nome.trim(),
           cognome: formData.cognome.trim(),
           ruolo: formData.ruolo,
         })
-        .eq("id", editingMember.id);
+        .eq("id", editingMember.id)
+        .select();
 
       if (error) {
         alert(`Errore durante la modifica: ${error.message}`);
+      } else if (!data || data.length === 0) {
+        alert("Nessun dato aggiornato! Verifica le policy RLS su Supabase.");
       } else {
         alert("Profilo aggiornato con successo!");
         setIsModalOpen(false);
@@ -169,13 +181,11 @@ function TeamManagement() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Gestione Team</h2>
         <div className="d-flex align-items-center gap-2">
-          {/* Pulsante Aggiungi Membro */}
           <button className="add-new-task" onClick={openCreateModal}>
             <b>
               <i className="bi bi-person-plus-fill me-1"></i>Aggiungi Membro
             </b>
           </button>
-          {/* Pulsante Aggiorna */}
           <button className="add-new-task" onClick={fetchTeam}>
             <b>
               <i className="bi bi-arrow-clockwise me-1"></i>Aggiorna
@@ -184,10 +194,35 @@ function TeamManagement() {
         </div>
       </div>
 
+      {/* Sezione Statistiche Team con UI Pulita */}
+      <div className="row g-3 mb-4">
+        <div className="col-md-3">
+          <div className="stat-card p-3 text-center text-md-start">
+            <span className="text-uppercase text-muted fw-bold small">Totale Membri</span>
+            <div className="display-6 fw-bold text-dark mt-1">{totaleMembri}</div>
+          </div>
+        </div>
+
+        <div className="col-md-9">
+          <div className="stat-card p-3 h-100 d-flex flex-column justify-content-center">
+            <span className="text-uppercase text-muted fw-bold small mb-2 d-block">
+              Membri per Ruolo
+            </span>
+            <div className="d-flex flex-wrap gap-2">
+              {RUOLI_DISPONIBILI.map((ruolo) => (
+                <div key={ruolo} className="role-pill">
+                  <span>{ruolo}:</span> <strong>{conteggioRuoli[ruolo] || 0}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {loading ? (
         <p>Caricamento in corso...</p>
       ) : (
-        <div className="table-responsive shadow-sm rounded">
+        <div className="table-responsive shadow-sm rounded-4 border-0">
           <table className="table table-hover align-middle mb-0 bg-white">
             <thead className="table-light">
               <tr>
@@ -203,12 +238,11 @@ function TeamManagement() {
                   <td><strong>{member.nome}</strong></td>
                   <td>{member.cognome}</td>
                   <td>
-                    <span className="badge bg-info text-dark">
+                    <span className="badge bg-light text-dark border-0 rounded-pill px-3 py-2">
                       {member.ruolo || "Membro"}
                     </span>
                   </td>
                   <td className="text-end">
-                    {/* Pulsante Modifica */}
                     <button
                       className="add-new-task me-2"
                       style={{ backgroundColor: "#ffc107", color: "#fff" }}
@@ -218,7 +252,6 @@ function TeamManagement() {
                         <i className="bi bi-pencil-fill me-1"></i> Modifica
                       </b>
                     </button>
-                    {/* Pulsante Elimina */}
                     <button
                       className="add-new-task"
                       style={{ backgroundColor: "#dc3545", color: "#fff" }}
@@ -306,7 +339,6 @@ function TeamManagement() {
             </div>
 
             <div className="d-flex justify-content-end gap-2 mt-4">
-              {/* Pulsante Annulla rosso con stile add-new-task */}
               <button
                 type="button"
                 className="add-new-task"
@@ -315,7 +347,6 @@ function TeamManagement() {
               >
                 <b>Annulla</b>
               </button>
-              {/* Pulsante di conferma */}
               <button type="submit" className="add-new-task">
                 <b>{editingMember ? "Salva Modifiche" : "Registra"}</b>
               </button>

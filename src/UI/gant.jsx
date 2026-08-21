@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "../App.css";
 import "./gant.css";
-import "./taskCard.css"; // Importato per applicare la classe add-new-task
+import "./taskCard.css";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 import { supabase } from "../supabaseClient";
@@ -98,12 +98,9 @@ function Gantt() {
   };
 
   return (
-    <div className="gantt-container p-4">
+    <div className="container-fluid px-4 px-md-5 mt-4 gantt-container">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          Diagramma di Gantt - Sviluppo Progetto
-        </h2>
-        {/* Pulsante in stile TaskCard */}
+        <h2>Diagramma di Gantt</h2>
         <button className="add-new-task" onClick={fetchTasks}>
           <b>
             <i className="bi bi-arrow-clockwise me-1"></i> Aggiorna
@@ -111,10 +108,17 @@ function Gantt() {
         </button>
       </div>
 
-      <div className="d-flex gap-3 mb-3 small fw-bold">
-        <span className="badge bg-secondary">Assegnato (To Do)</span>
-        <span className="badge bg-warning text-dark">In Progress</span>
-        <span className="badge bg-success">Terminato (Done)</span>
+      {/* Legenda con colori sincronizzati a quelli delle barre */}
+      <div className="d-flex gap-2 mb-4">
+        <span className="badge bg-secondary text-white rounded-pill border-0 px-3 py-2 fw-medium">
+          To Do
+        </span>
+        <span className="badge bg-warning text-dark rounded-pill border-0 px-3 py-2 fw-medium">
+          In Progress
+        </span>
+        <span className="badge bg-success text-white rounded-pill border-0 px-3 py-2 fw-medium">
+          Done
+        </span>
       </div>
 
       {loading ? (
@@ -124,22 +128,24 @@ function Gantt() {
           </div>
         </div>
       ) : tasks.length === 0 ? (
-        <div className="alert alert-info">Nessun task trovato nel sistema.</div>
+        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4">
+          Nessun task trovato nel sistema.
+        </div>
       ) : (
-        <div className="gantt-wrapper shadow-sm rounded">
+        <div className="gantt-wrapper shadow-sm bg-white">
           <div className="gantt-header d-flex border-bottom">
-            <div className="gantt-task-label-header fw-bold p-2 border-end" style={{ width: "200px" }}>
+            <div className="gantt-task-label-header">
               Task
             </div>
             <div className="gantt-timeline-header d-flex flex-grow-1">
               {daysHeader.map((date, index) => (
                 <div
                   key={index}
-                  className="gantt-day-column text-center border-end p-1"
+                  className="gantt-day-column text-center border-start"
                   style={{ width: `${100 / totalDays}%` }}
                 >
-                  <span className="d-block small fw-bold">
-                    {date.toLocaleDateString("it-IT", { weekday: "narrow" })}
+                  <span className="d-block text-uppercase fw-semibold" style={{ fontSize: "0.7rem" }}>
+                    {date.toLocaleDateString("it-IT", { weekday: "short" }).replace(".", "")}
                   </span>
                   <span className="d-block extra-small text-muted">
                     {date.getDate()}/{date.getMonth() + 1}
@@ -155,21 +161,25 @@ function Gantt() {
               const statusClass = getStatusColor(task.stato);
 
               return (
-                <div key={task.id} className="gantt-row d-flex border-bottom">
-                  <div className="gantt-task-label p-2 border-end text-truncate" style={{ width: "200px" }}>
-                    <strong className="d-block text-truncate">{task.titolo}</strong>
-                    <small className="text-muted d-block">
-                      Stato: {task.stato || "todo"}
-                    </small>
+                <div key={task.id} className="gantt-row d-flex border-bottom align-items-center">
+                  <div className="gantt-task-label border-end">
+                    <strong>{task.titolo}</strong>
+                    <small>{task.stato || "todo"}</small>
                   </div>
 
-                  <div className="gantt-timeline-row flex-grow-1 position-relative" style={{ height: "45px" }}>
+                  <div
+                    className="gantt-timeline-row flex-grow-1 position-relative align-self-stretch"
+                    style={{
+                      backgroundSize: `calc(100% / ${totalDays}) 100%`,
+                    }}
+                  >
                     <div
-                      className={`gantt-bar position-absolute rounded shadow-sm p-1 extra-small text-truncate d-flex align-items-center justify-content-center ${statusClass}`}
+                      className={`gantt-bar position-absolute shadow-sm text-truncate ${statusClass}`}
                       style={{
                         ...barStyle,
-                        top: "8px",
-                        height: "28px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        height: "30px",
                       }}
                       title={`${task.titolo} | Inizio: ${
                         task.created_at ? new Date(task.created_at).toLocaleDateString("it-IT") : "-"

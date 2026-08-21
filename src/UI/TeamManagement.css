@@ -1,0 +1,36 @@
+/* Rimuove i contorni e glow blu di default da input, select e pulsanti */
+.form-control:focus,
+.form-select:focus,
+.btn:focus,
+button:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: #dee2e6 !important;
+}
+
+/* Card statistiche pulite senza bordi invasivi */
+.stat-card {
+  border: none !important;
+  border-radius: 16px !important;
+  background-color: #f8f9fa;
+  transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+  background-color: #f1f3f5;
+}
+
+/* Pill badge arrotondati e puliti */
+.role-pill {
+  border-radius: 50rem !important;
+  padding: 6px 14px !important;
+  font-weight: 500;
+  font-size: 0.85rem;
+  background-color: #ffffff;
+  border: 1px solid #e9ecef;
+  color: #495057;
+}
+
+.role-pill strong {
+  color: #212529;
+}

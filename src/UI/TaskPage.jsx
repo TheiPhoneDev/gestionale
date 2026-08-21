@@ -12,10 +12,14 @@ function TaskPage({ projectId }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nomeProgetto, setNomeProgetto] = useState("");
+  const [nomeAzienda, setNomeAzienda] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("Tutti");
 
   const [utenti, setUtenti] = useState([]);
   const [progetti, setProgetti] = useState([]);
+  const [currentProfileId, setCurrentProfileId] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -31,47 +35,78 @@ function TaskPage({ projectId }) {
     stato: "todo",
   });
 
+  const fetchCurrentUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profiloData } = await supabase
+        .from("profili")
+        .select("id, ruolo")
+        .eq("id", user.id)
+        .single();
+
+      if (profiloData) {
+        setCurrentProfileId(profiloData.id);
+        setCurrentUserRole(profiloData.ruolo || "");
+      } else {
+        setCurrentProfileId(user.id);
+      }
+    }
+  };
+
   const fetchTasks = async () => {
     setLoading(true);
 
-    if (projectId) {
-      const { data: projData } = await supabase
-        .from("progetti")
-        .select("nome")
-        .eq("id", projectId)
-        .single();
+    try {
+      if (projectId) {
+        const { data: projData, error: projError } = await supabase
+          .from("progetti")
+          .select(`
+            nome,
+            clienti ( nome, azienda )
+          `)
+          .eq("id", projectId)
+          .single();
 
-      if (projData) setNomeProgetto(projData.nome);
-    } else {
-      setNomeProgetto("");
+        if (projError) {
+          console.error("Errore recupero progetto/cliente:", projError);
+        }
+
+        if (projData) {
+          setNomeProgetto(projData.nome);
+          const infoCliente = projData.clienti;
+          setNomeAzienda(infoCliente?.azienda || infoCliente?.nome || "");
+        }
+      } else {
+        setNomeProgetto("");
+        setNomeAzienda("");
+      }
+
+      let query = supabase
+        .from("task")
+        .select(`
+          *,
+          progetti ( id, nome ),
+          task_profili (
+            profili ( id, nome, cognome )
+          )
+        `);
+
+      if (projectId) {
+        query = query.eq("progetto_id", projectId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Errore Supabase nel recupero dei task:", error);
+      } else {
+        setTasks(data || []);
+      }
+    } catch (err) {
+      console.error("Errore imprevisto durante il fetch:", err);
+    } finally {
+      setLoading(false);
     }
-
-    let query = supabase
-      .from("task")
-      .select(`
-        id,
-        titolo,
-        descrizione,
-        stato,
-        scadenza,
-        progetti ( id, nome ),
-        task_profili (
-          profili ( id, nome, cognome )
-        )
-      `);
-
-    if (projectId) {
-      query = query.eq("progetto_id", projectId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Errore nel recupero dei task:", error);
-    } else if (data) {
-      setTasks(data);
-    }
-    setLoading(false);
   };
 
   const fetchDropdownData = async () => {
@@ -89,6 +124,7 @@ function TaskPage({ projectId }) {
   };
 
   useEffect(() => {
+    fetchCurrentUserProfile();
     fetchTasks();
     fetchDropdownData();
   }, [projectId]);
@@ -124,12 +160,23 @@ function TaskPage({ projectId }) {
   };
 
   const handleRowClick = (task) => {
+    const isAssigned = task.task_profili?.some(
+      (tp) => tp.profili?.id === currentProfileId
+    );
+    const isAdmin = currentUserRole?.toLowerCase() === "admin";
+    const canEdit = isAssigned || isAdmin;
+
+    if (!canEdit) {
+      alert("Non hai i permessi per modificare questo task.");
+      return;
+    }
+
     setSelectedTask(task);
     setFormData({
       titolo: task.titolo || "",
       descrizione: task.descrizione || "",
       scadenza: task.scadenza ? task.scadenza.split("T")[0] : "",
-      priorita: "Media",
+      priorita: task.priorita || task.priority || "Media",
       progetto_id: task.progetti ? task.progetti.id : "",
       stato: task.stato || "todo",
     });
@@ -141,7 +188,7 @@ function TaskPage({ projectId }) {
     }
 
     const attualiMembriIds = task.task_profili
-      ? task.task_profili.map((tp) => tp.profili.id)
+      ? task.task_profili.map((tp) => tp.profili?.id).filter(Boolean)
       : [];
     setSelectedProfili(attualiMembriIds);
 
@@ -161,16 +208,19 @@ function TaskPage({ projectId }) {
       return;
     }
 
+    const payload = {
+      titolo: formData.titolo,
+      descrizione: formData.descrizione,
+      scadenza: formData.scadenza || null,
+      priorita: formData.priorita,
+      progetto_id: formData.progetto_id || null,
+      stato: formData.stato,
+    };
+
     if (selectedTask) {
       const { error: taskError } = await supabase
         .from("task")
-        .update({
-          titolo: formData.titolo,
-          descrizione: formData.descrizione,
-          scadenza: formData.scadenza || null,
-          progetto_id: formData.progetto_id || null,
-          stato: formData.stato,
-        })
+        .update(payload)
         .eq("id", selectedTask.id);
 
       if (taskError) {
@@ -190,15 +240,7 @@ function TaskPage({ projectId }) {
     } else {
       const { data: newTask, error: taskError } = await supabase
         .from("task")
-        .insert([
-          {
-            titolo: formData.titolo,
-            descrizione: formData.descrizione,
-            scadenza: formData.scadenza || null,
-            progetto_id: formData.progetto_id || null,
-            stato: formData.stato || "todo",
-          },
-        ])
+        .insert([payload])
         .select()
         .single();
 
@@ -220,15 +262,26 @@ function TaskPage({ projectId }) {
     fetchTasks();
   };
 
-  const handleStatusChange = async (taskId, newStatus) => {
+  const handleStatusChange = async (task, newStatus) => {
+    const isAssigned = task.task_profili?.some(
+      (tp) => tp.profili?.id === currentProfileId
+    );
+    const isAdmin = currentUserRole?.toLowerCase() === "admin";
+    const canEdit = isAssigned || isAdmin;
+
+    if (!canEdit) {
+      alert("Non puoi modificare questo task perché non sei né assegnato né un amministratore.");
+      return;
+    }
+
     setTasks((prevTasks) =>
-      prevTasks.map((t) => (t.id === taskId ? { ...t, stato: newStatus } : t))
+      prevTasks.map((t) => (t.id === task.id ? { ...t, stato: newStatus } : t))
     );
 
     const { error } = await supabase
       .from("task")
       .update({ stato: newStatus })
-      .eq("id", taskId);
+      .eq("id", task.id);
 
     if (error) {
       console.error("Errore aggiornamento stato:", error);
@@ -238,80 +291,232 @@ function TaskPage({ projectId }) {
   };
 
   const getStatusBadgeStyle = (stato) => {
-    switch (stato) {
+    switch (stato?.toLowerCase()) {
       case "done":
       case "completato":
-        return "bg-success text-white border-success";
+        return "bg-success text-white";
       case "in_progress":
       case "in_corso":
-        return "bg-warning text-dark border-warning";
+        return "bg-warning text-dark";
       default:
-        return "bg-secondary text-white border-secondary";
+        return "bg-secondary text-white";
     }
   };
 
-  // Logica di filtraggio per i task
-  const tasksFiltrati = tasks.filter((t) => {
-    if (!searchTerm) return true;
-    const ricerca = searchTerm.toLowerCase();
+  const getPriorityBadge = (task) => {
+    const val = (task.priorita || task.priority || "").toString().trim().toLowerCase();
+    switch (val) {
+      case "alta":
+        return (
+          <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-1">
+            <i className="bi bi-arrow-up-circle-fill me-1"></i>Alta
+          </span>
+        );
+      case "media":
+        return (
+          <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-1">
+            <i className="bi bi-dash-circle-fill me-1"></i>Media
+          </span>
+        );
+      case "bassa":
+        return (
+          <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill px-2 py-1">
+            <i className="bi bi-arrow-down-circle-fill me-1"></i>Bassa
+          </span>
+        );
+      default:
+        return <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1">-</span>;
+    }
+  };
 
+  const tasksFiltrati = tasks.filter((t) => {
+    const ricerca = searchTerm ? searchTerm.toLowerCase().trim() : "";
     const titolo = (t.titolo || "").toLowerCase();
     const descrizione = (t.descrizione || "").toLowerCase();
-    const nomeProgetto = t.progetti ? (t.progetti.nome || "").toLowerCase() : "";
+    const nomeProgetto = t.progetti?.nome ? t.progetti.nome.toLowerCase() : "";
     const assegnati = t.task_profili
       ? t.task_profili
-          .map((tp) => `${tp.profili.nome || ""} ${tp.profili.cognome || ""}`)
+          .map((tp) => `${tp.profili?.nome || ""} ${tp.profili?.cognome || ""}`)
           .join(" ")
           .toLowerCase()
       : "";
 
-    return (
+    const matchesSearch =
+      !ricerca ||
       titolo.includes(ricerca) ||
       descrizione.includes(ricerca) ||
       nomeProgetto.includes(ricerca) ||
-      assegnati.includes(ricerca)
-    );
+      assegnati.includes(ricerca);
+
+    if (priorityFilter === "Tutti") return matchesSearch;
+
+    const valPriorita = (t.priorita || t.priority || "").toString().trim().toLowerCase();
+    const valFiltro = priorityFilter.toLowerCase().trim();
+
+    return matchesSearch && valPriorita === valFiltro;
   });
+
+  const tasksOrdinati = [...tasksFiltrati].sort((a, b) => {
+    const isDoneA = a.stato?.toLowerCase() === "done" || a.stato?.toLowerCase() === "completato";
+    const isDoneB = b.stato?.toLowerCase() === "done" || b.stato?.toLowerCase() === "completato";
+
+    if (isDoneA !== isDoneB) return isDoneA ? 1 : -1;
+    if (!a.scadenza && !b.scadenza) return 0;
+    if (!a.scadenza) return 1;
+    if (!b.scadenza) return -1;
+
+    return new Date(a.scadenza) - new Date(b.scadenza);
+  });
+
+  const totalTasks = tasksFiltrati.length;
+  const doneTasks = tasksFiltrati.filter(
+    (t) => t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato"
+  ).length;
+  const inProgressTasks = tasksFiltrati.filter(
+    (t) => t.stato?.toLowerCase() === "in_progress" || t.stato?.toLowerCase() === "in_corso"
+  ).length;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const expTasks = tasksFiltrati.filter((t) => {
+    if (!t.scadenza || t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato") {
+      return false;
+    }
+    const d = new Date(t.scadenza);
+    return d <= threeDaysFromNow;
+  }).length;
+
+  const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+  const renderScadenzaBadge = (scadenza, stato) => {
+    if (!scadenza) return <span className="text-muted small">-</span>;
+
+    const dataScadenza = new Date(scadenza);
+    dataScadenza.setHours(0, 0, 0, 0);
+
+    const isCompletato = stato?.toLowerCase() === "done" || stato?.toLowerCase() === "completato";
+    const dataFormattata = new Date(scadenza).toLocaleDateString("it-IT");
+
+    if (isCompletato) return <span>{dataFormattata}</span>;
+
+    if (dataScadenza < now) {
+      return (
+        <span className="badge bg-danger-subtle text-danger fw-semibold px-2 py-1 rounded-pill">
+          <i className="bi bi-exclamation-circle me-1"></i>{dataFormattata} (Scaduto)
+        </span>
+      );
+    }
+
+    if (dataScadenza <= threeDaysFromNow) {
+      return (
+        <span className="badge bg-warning-subtle text-warning-emphasis fw-semibold px-2 py-1 rounded-pill">
+          <i className="bi bi-clock me-1"></i>{dataFormattata} (In Scadenza)
+        </span>
+      );
+    }
+
+    return <span>{dataFormattata}</span>;
+  };
 
   return (
     <div className="container mt-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          {projectId
-            ? `Task Progetto: ${nomeProgetto || "Caricamento..."}`
-            : "Tutti i Task"}
-        </h2>
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <h2 className="mb-0">
+            {projectId ? `${nomeProgetto || "Caricamento..."}` : "Tutti i Task"}
+          </h2>
+          {projectId && nomeAzienda && (
+            <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2 fs-6 ms-2">
+              <i className="bi bi-building me-1"></i>{nomeAzienda}
+            </span>
+          )}
+        </div>
+
         <div className="d-flex align-items-center gap-2">
-          {/* Pulsanti con lo stile di TaskCard */}
           <button className="add-new-task" onClick={handleOpenCreateModal}>
-            <b>
-              <i className="bi bi-plus me-1"></i>
-              Crea Task
-            </b>
+            <b><i className="bi bi-plus me-1"></i>Crea Task</b>
           </button>
           <button className="add-new-task" onClick={fetchTasks}>
-            <b>
-              <i className="bi bi-arrow-clockwise me-1"></i>
-              Aggiorna
-            </b>
+            <b><i className="bi bi-arrow-clockwise me-1"></i>Aggiorna</b>
           </button>
         </div>
       </div>
 
-      {/* Barra di ricerca */}
-      <div className="mb-4">
-        <div className="input-group search-bar shadow-sm">
-          <span className="input-group-text bg-white border-end-0">
-            <i className="bi bi-search text-muted"></i>
-          </span>
+      <div className="row g-3 mb-4">
+        <div className="col-6 col-md-3">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Totale Task</span>
+              <span className="h4 fw-bold mb-0">{totalTasks}</span>
+            </div>
+            <div className="bg-light rounded-circle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
+              <i className="bi bi-list-task fs-4"></i>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">In Corso</span>
+              <span className="h4 fw-bold mb-0 text-warning">{inProgressTasks}</span>
+            </div>
+            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
+              <i className="bi bi-hourglass-split fs-4"></i>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Completati ({completionRate}%)</span>
+              <span className="h4 fw-bold mb-0 text-success">{doneTasks}</span>
+            </div>
+            <div className="bg-success-subtle rounded-circle text-success d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
+              <i className="bi bi-check-circle fs-4"></i>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-3">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">In Scadenza</span>
+              <span className="h4 fw-bold mb-0 text-danger">{expTasks}</span>
+            </div>
+            <div className="bg-danger-subtle rounded-circle text-danger d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
+              <i className="bi bi-exclamation-triangle fs-4"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <div className="input-group search-bar-clean align-items-center">
+          <span className="bg-transparent border-0 pe-2"><i className="bi bi-search text-muted"></i></span>
           <input
             type="text"
-            className="form-control border-start-0 ps-0"
-            placeholder="Cerca task per titolo, descrizione, progetto o persone assegnate..."
+            className="form-control bg-transparent border-0 ps-0 shadow-none"
+            placeholder="Cerca task per titolo, descrizione, progetto o persone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="d-flex gap-2 mb-4 overflow-x-auto pb-1">
+        {["Tutti", "Alta", "Media", "Bassa"].map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${
+              priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"
+            }`}
+            onClick={() => setPriorityFilter(p)}
+          >
+            {p === "Tutti" ? "Tutti i Task" : `Priorità ${p}`}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -320,132 +525,133 @@ function TaskPage({ projectId }) {
             <span className="visually-hidden">Caricamento...</span>
           </div>
         </div>
-      ) : tasksFiltrati.length === 0 ? (
-        <div className="alert alert-info">
-          {searchTerm
-            ? "Nessun task corrisponde ai criteri di ricerca."
-            : projectId
-            ? "Nessun task trovato per questo progetto."
-            : "Nessun task trovato nel sistema."}
+      ) : tasksOrdinati.length === 0 ? (
+        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4">
+          Nessun task trovato.
         </div>
       ) : (
-        <div className="table-responsive shadow-sm rounded">
+        <div className="table-responsive shadow-sm rounded-4 border-0">
           <table className="table table-hover align-middle mb-0 bg-white">
             <thead className="table-light">
               <tr>
                 <th>Titolo</th>
                 {!projectId && <th>Progetto</th>}
+                <th>Priorità</th>
                 <th>Assegnato a</th>
                 <th>Scadenza</th>
                 <th>Stato</th>
               </tr>
             </thead>
             <tbody>
-              {tasksFiltrati.map((t) => (
-                <tr
-                  key={t.id}
-                  onClick={() => handleRowClick(t)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <td>
-                    <strong>{t.titolo}</strong>
-                    {t.descrizione && (
-                      <div className="text-muted small text-truncate" style={{ maxWidth: "250px" }}>
-                        {t.descrizione}
-                      </div>
-                    )}
-                  </td>
-                  {!projectId && (
+              {tasksOrdinati.map((t) => {
+                const isAssigned = t.task_profili?.some(
+                  (tp) => tp.profili?.id === currentProfileId
+                );
+                const isAdmin = currentUserRole?.toLowerCase() === "admin";
+                const canEdit = isAssigned || isAdmin;
+
+                return (
+                  <tr
+                    key={t.id}
+                    onClick={() => handleRowClick(t)}
+                    style={{ cursor: canEdit ? "pointer" : "not-allowed" }}
+                  >
                     <td>
-                      {t.progetti ? (
-                        <span className="badge bg-light text-dark border">
-                          <i className="bi bi-folder me-1"></i>
-                          {t.progetti.nome}
-                        </span>
-                      ) : (
-                        <span className="text-muted small">-</span>
+                      <strong>{t.titolo}</strong>
+                      {t.descrizione && (
+                        <div className="text-muted small text-truncate" style={{ maxWidth: "250px" }}>
+                          {t.descrizione}
+                        </div>
                       )}
                     </td>
-                  )}
-                  <td>
-                    {t.task_profili && t.task_profili.length > 0 ? (
-                      <div className="d-flex flex-wrap gap-1">
-                        {t.task_profili.map((tp) => (
-                          <span
-                            key={tp.profili.id}
-                            className="badge bg-secondary text-white"
-                          >
-                            <i className="bi bi-person me-1"></i>
-                            {tp.profili.nome} {tp.profili.cognome}
+                    {!projectId && (
+                      <td>
+                        {t.progetti ? (
+                          <span className="badge bg-light text-dark border-0 rounded-pill px-3 py-2">
+                            <i className="bi bi-folder me-1"></i>{t.progetti.nome}
                           </span>
-                        ))}
+                        ) : (
+                          <span className="text-muted small">-</span>
+                        )}
+                      </td>
+                    )}
+                    <td>{getPriorityBadge(t)}</td>
+                    <td>
+                      {t.task_profili && t.task_profili.length > 0 ? (
+                        <div className="d-flex flex-wrap gap-1">
+                          {t.task_profili.map((tp, idx) => {
+                            const isMe = tp.profili?.id === currentProfileId;
+                            return (
+                              <span
+                                key={tp.profili?.id || idx}
+                                className={`badge ${isMe ? 'bg-primary text-white' : 'bg-light text-secondary'} border-0 rounded-pill px-3 py-2`}
+                              >
+                                <i className="bi bi-person me-1"></i>
+                                {tp.profili?.nome || ""} {tp.profili?.cognome || ""} {isMe && "(Tu)"}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-muted small">Nessuno</span>
+                      )}
+                    </td>
+                    <td>{renderScadenzaBadge(t.scadenza, t.stato)}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="d-flex align-items-center gap-1">
+                        <select
+                          className={`form-select form-select-sm task-status-select ${getStatusBadgeStyle(t.stato)} ${!canEdit ? 'opacity-75' : ''}`}
+                          value={t.stato || "todo"}
+                          onChange={(e) => handleStatusChange(t, e.target.value)}
+                          disabled={!canEdit}
+                          style={{ cursor: canEdit ? "pointer" : "not-allowed", width: "130px" }}
+                        >
+                          <option value="todo" className="bg-white text-dark">To Do</option>
+                          <option value="in_progress" className="bg-white text-dark">In Progress</option>
+                          <option value="done" className="bg-white text-dark">Done</option>
+                        </select>
+                        {!canEdit && (
+                          <span className="text-muted" title="Non hai i permessi per modificare questo task">
+                            <i className="bi bi-lock-fill small"></i>
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-muted small">Nessuno</span>
-                    )}
-                  </td>
-                  <td>
-                    {t.scadenza ? (
-                      new Date(t.scadenza).toLocaleDateString("it-IT")
-                    ) : (
-                      <span className="text-muted small">-</span>
-                    )}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <select
-                      className={`form-select form-select-sm fw-bold ${getStatusBadgeStyle(
-                        t.stato
-                      )}`}
-                      value={t.stato || "todo"}
-                      onChange={(e) => handleStatusChange(t.id, e.target.value)}
-                      style={{ cursor: "pointer", width: "130px" }}
-                    >
-                      <option value="todo" className="bg-white text-dark">
-                        To Do
-                      </option>
-                      <option value="in_progress" className="bg-white text-dark">
-                        In Progress
-                      </option>
-                      <option value="done" className="bg-white text-dark">
-                        Done
-                      </option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Modale Unificata */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="modal-internal-content">
-          <h3 className="modal-title mb-3">
+        <div className="p-3">
+          <h3 className="modal-title mb-4">
             {selectedTask ? "Modifica Task" : "Nuovo Task"}
           </h3>
 
           <form onSubmit={handleSaveTask}>
-            <div className="MioContenitore">
-              <div className="form-group mb-3">
-                <span>Titolo *</span>
-                <input
-                  type="text"
-                  name="titolo"
-                  value={formData.titolo}
-                  onChange={handleInputChange}
-                  className="form-control"
-                  required
-                />
-              </div>
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Titolo *</label>
+              <input
+                type="text"
+                name="titolo"
+                value={formData.titolo}
+                onChange={handleInputChange}
+                className="form-control"
+                required
+              />
+            </div>
 
-              <div className="form-group mb-3">
-                <span>Priorità</span>
+            <div className="row g-3 mb-3">
+              <div className="col-md-6">
+                <label className="form-label fw-semibold">Priorità</label>
                 <select
                   name="priorita"
                   value={formData.priorita}
                   onChange={handleInputChange}
-                  className="form-control"
+                  className="form-select"
                 >
                   <option value="Bassa">Bassa</option>
                   <option value="Media">Media</option>
@@ -453,8 +659,8 @@ function TaskPage({ projectId }) {
                 </select>
               </div>
 
-              <div className="form-group mb-3">
-                <span>Scadenza</span>
+              <div className="col-md-6">
+                <label className="form-label fw-semibold">Scadenza</label>
                 <input
                   type="date"
                   name="scadenza"
@@ -463,105 +669,110 @@ function TaskPage({ projectId }) {
                   className="form-control"
                 />
               </div>
+            </div>
 
-              {selectedTask && (
-                <div className="form-group mb-3">
-                  <span>Stato</span>
-                  <select
-                    name="stato"
-                    value={formData.stato}
-                    onChange={handleInputChange}
-                    className="form-select"
-                  >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="done">Done</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="form-group mb-3">
-                <span>Progetto</span>
-                <Dropdown className="w-100">
-                  <Dropdown.Toggle id="dropdown-progetti" className="w-100 text-start">
-                    {selectedProjectLabel}
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu>
-                    {progetti.length === 0 ? (
-                      <Dropdown.Item disabled>Nessun progetto trovato</Dropdown.Item>
-                    ) : (
-                      progetti.map((proj) => (
-                        <Dropdown.Item
-                          key={proj.id}
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, progetto_id: proj.id }));
-                            setSelectedProjectLabel(proj.nome);
-                          }}
-                        >
-                          {proj.nome}
-                        </Dropdown.Item>
-                      ))
-                    )}
-                  </Dropdown.Menu>
-                </Dropdown>
-              </div>
-
-              <div className="form-group full-width mb-3">
-                <span className="mb-2 d-block">Assegna a (seleziona uno o più membri):</span>
-                <div className="d-flex flex-wrap gap-2 p-2 border rounded bg-light">
-                  {utenti.length === 0 ? (
-                    <span className="text-muted small">Nessun membro del team trovato</span>
-                  ) : (
-                    utenti.map((member) => {
-                      const isSelected = selectedProfili.includes(member.id);
-                      return (
-                        <button
-                          key={member.id}
-                          type="button"
-                          className={`btn btn-sm ${
-                            isSelected ? "btn-primary" : "btn-outline-secondary"
-                          }`}
-                          onClick={() => toggleProfilo(member.id)}
-                        >
-                          <i
-                            className={`bi bi-${
-                              isSelected ? "check-circle-fill" : "plus-circle"
-                            } me-1`}
-                          ></i>
-                          {member.nome} {member.cognome}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="form-group full-width mb-3">
-                <span>Descrizione</span>
-                <textarea
-                  name="descrizione"
-                  value={formData.descrizione}
+            {selectedTask && (
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Stato</label>
+                <select
+                  name="stato"
+                  value={formData.stato}
                   onChange={handleInputChange}
-                  className="form-control"
-                  rows="3"
-                />
+                  className="form-select"
+                >
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+              </div>
+            )}
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Progetto</label>
+              <Dropdown className="w-100">
+                <Dropdown.Toggle
+                  id="dropdown-progetti"
+                  variant="light"
+                  className="w-100 text-start border rounded-3 bg-white"
+                >
+                  {selectedProjectLabel}
+                </Dropdown.Toggle>
+                <Dropdown.Menu className="w-100 shadow-sm border-0 rounded-3">
+                  {progetti.length === 0 ? (
+                    <Dropdown.Item disabled>Nessun progetto trovato</Dropdown.Item>
+                  ) : (
+                    progetti.map((proj) => (
+                      <Dropdown.Item
+                        key={proj.id}
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, progetto_id: proj.id }));
+                          setSelectedProjectLabel(proj.nome);
+                        }}
+                      >
+                        {proj.nome}
+                      </Dropdown.Item>
+                    ))
+                  )}
+                </Dropdown.Menu>
+              </Dropdown>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold d-block">
+                Assegna a membri del team:
+              </label>
+              <div className="d-flex flex-wrap gap-2 p-3 rounded-3 bg-light border-0">
+                {utenti.length === 0 ? (
+                  <span className="text-muted small">Nessun membro trovato</span>
+                ) : (
+                  utenti.map((member) => {
+                    const isSelected = selectedProfili.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        className={`badge-pill-clean btn btn-sm ${
+                          isSelected
+                            ? "btn-dark text-white"
+                            : "btn-outline-secondary border-0 bg-white"
+                        }`}
+                        onClick={() => toggleProfilo(member.id)}
+                      >
+                        <i
+                          className={`bi bi-${
+                            isSelected ? "check-circle-fill" : "plus-circle"
+                          } me-1`}
+                        ></i>
+                        {member.nome} {member.cognome}
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            {/* Azioni Modale con Stile Add-New-Task */}
-            <div className="modal-actions mt-3 d-flex justify-content-end gap-2">
+            <div className="mb-4">
+              <label className="form-label fw-semibold">Descrizione</label>
+              <textarea
+                name="descrizione"
+                value={formData.descrizione}
+                onChange={handleInputChange}
+                className="form-control"
+                rows="3"
+              />
+            </div>
+
+            <div className="d-flex justify-content-end gap-2">
               <button
                 type="button"
                 className="add-new-task"
-                style={{ backgroundColor: "#dc3545", borderColor: "#dc3545" }}
+                style={{ backgroundColor: "#dc3545", color: "#fff" }}
                 onClick={() => setIsModalOpen(false)}
               >
                 <b>Annulla</b>
               </button>
               <button type="submit" className="add-new-task">
-                <b>
-                  {selectedTask ? "Salva Modifiche" : "Crea Task"}
-                </b>
+                <b>{selectedTask ? "Salva Modifiche" : "Crea Task"}</b>
               </button>
             </div>
           </form>

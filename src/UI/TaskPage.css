@@ -1,0 +1,63 @@
+/* Rimuove i bordi e bagliori blu di default al focus */
+.search-bar input:focus,
+.task-select:focus,
+.form-control:focus,
+.form-select:focus,
+.btn:focus,
+button:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Barra di ricerca arrotondata e pulita */
+.search-bar-clean {
+  background-color: #f8f9fa;
+  border: 1px solid #edf2f7;
+  border-radius: 50rem !important;
+  padding: 4px 16px;
+  transition: all 0.2s ease;
+}
+
+.search-bar-clean:focus-within {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Badge minimal e pillole */
+.badge-pill-clean {
+  border-radius: 50rem !important;
+  padding: 6px 12px;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+/* Selector per lo Stato (Pill minimal senza tendina invasiva) */
+.task-status-select {
+  border-radius: 50rem !important;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  border: none !important;
+  font-weight: 600;
+}
+
+/* --- Modifica Altezza e Dimensioni Modale --- */
+.modal-dialog {
+  max-width: 650px !important; /* Ingrandisce la larghezza della modale */
+  margin: 1.75rem auto;
+}
+
+.modal-content {
+  max-height: 85vh !important; /* Permette alla modale di occupare fino all'85% dell'altezza dello schermo */
+  border-radius: 1.25rem !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-body,
+.modal-content > div {
+  max-height: 85vh;
+  overflow-y: auto; /* Attiva lo scorrimento interno pulito se il contenuto è lungo */
+}
