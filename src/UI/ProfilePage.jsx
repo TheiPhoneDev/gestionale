@@ -20,17 +20,26 @@ function ProfilePage({ currentUser, onLogout }) {
     );
   }
 
+  // Estrae le iniziali dal nome e cognome dell'utente
+  const getInitials = () => {
+    const nomeIniziale = currentUser.nome ? currentUser.nome.charAt(0) : "";
+    const cognomeIniziale = currentUser.cognome ? currentUser.cognome.charAt(0) : "";
+    const initials = `${nomeIniziale}${cognomeIniziale}`.toUpperCase();
+    return initials || (currentUser.email ? currentUser.email.charAt(0).toUpperCase() : "U");
+  };
+
   return (
     <div className="container mt-4">
       <h2 className="mb-4">Il mio Profilo</h2>
 
       <div className="card shadow-sm border-0 rounded-4 p-4 max-w-lg bg-white">
         <div className="d-flex align-items-center mb-4">
+          {/* Cerchio colorato con le iniziali dell'utente */}
           <div
-            className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
-            style={{ width: "70px", height: "70px", fontSize: "2rem" }}
+            className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3 fw-bold flex-shrink-0"
+            style={{ width: "70px", height: "70px", fontSize: "1.5rem" }}
           >
-            <i className="bi bi-person"></i>
+            {getInitials()}
           </div>
           <div>
             <h3 className="mb-0">

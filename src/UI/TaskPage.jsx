@@ -53,6 +53,69 @@ function TaskPage({ projectId }) {
     }
   };
 
+  // Funzione per controllare e generare notifiche automatiche per le scadenze[cite: 7]
+  const controllaScadenzeTask = async (profileId) => {
+    if (!profileId) return;
+
+    const { data: taskMiei, error } = await supabase
+      .from("task")
+      .select(`
+        id, 
+        titolo, 
+        scadenza, 
+        stato,
+        task_profili!inner ( profilo_id )
+      `)
+      .eq("task_profili.profilo_id", profileId);
+
+    if (error || !taskMiei) return;
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    for (const task of taskMiei) {
+      if (!task.scadenza) continue;
+      
+      const isDone = ["done", "completato"].includes((task.stato || "").toLowerCase());
+      if (isDone) continue;
+
+      const scadenzaDate = new Date(task.scadenza);
+      scadenzaDate.setHours(0, 0, 0, 0);
+
+      let titoloNotifica = "";
+      let messaggioNotifica = "";
+
+      if (scadenzaDate.getTime() === now.getTime()) {
+        titoloNotifica = "Task in scadenza oggi!";
+        messaggioNotifica = `Il task "${task.titolo}" scade oggi.`;
+      } else if (scadenzaDate < now) {
+        titoloNotifica = "Task scaduto!";
+        messaggioNotifica = `Il task "${task.titolo}" è scaduto.`;
+      }
+
+      if (titoloNotifica) {
+        const { data: esistente } = await supabase
+          .from("notifiche")
+          .select("id")
+          .eq("user_id", profileId)
+          .eq("titolo", titoloNotifica)
+          .ilike("messaggio", `%${task.titolo}%`)
+          .eq("letta", false);
+
+        if (!esistente || esistente.length === 0) {
+          await supabase.from("notifiche").insert([
+            {
+              user_id: profileId,
+              titolo: titoloNotifica,
+              messaggio: messaggioNotifica,
+              letta: false
+            }
+          ]);
+        }
+      }
+    }
+  };
+
   const fetchTasks = async () => {
     setLoading(true);
 
@@ -67,11 +130,7 @@ function TaskPage({ projectId }) {
           .eq("id", projectId)
           .single();
 
-        if (projError) {
-          console.error("Errore recupero progetto/cliente:", projError);
-        }
-
-        if (projData) {
+        if (!projError && projData) {
           setNomeProgetto(projData.nome);
           const infoCliente = projData.clienti;
           setNomeAzienda(infoCliente?.azienda || infoCliente?.nome || "");
@@ -97,9 +156,7 @@ function TaskPage({ projectId }) {
 
       const { data, error } = await query;
 
-      if (error) {
-        console.error("Errore Supabase nel recupero dei task:", error);
-      } else {
+      if (!error) {
         setTasks(data || []);
       }
     } catch (err) {
@@ -124,9 +181,35 @@ function TaskPage({ projectId }) {
   };
 
   useEffect(() => {
-    fetchCurrentUserProfile();
-    fetchTasks();
-    fetchDropdownData();
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      let pId = user?.id;
+
+      if (user) {
+        const { data: profiloData } = await supabase
+          .from("profili")
+          .select("id, ruolo")
+          .eq("id", user.id)
+          .single();
+
+        if (profiloData) {
+          pId = profiloData.id;
+          setCurrentProfileId(profiloData.id);
+          setCurrentUserRole(profiloData.ruolo || "");
+        } else {
+          setCurrentProfileId(user.id);
+        }
+      }
+
+      await fetchTasks();
+      await fetchDropdownData();
+
+      if (pId) {
+        await controllaScadenzeTask(pId);
+      }
+    };
+
+    init();
   }, [projectId]);
 
   const toggleProfilo = (profiloId) => {
@@ -217,6 +300,8 @@ function TaskPage({ projectId }) {
       stato: formData.stato,
     };
 
+    let targetTaskId = null;
+
     if (selectedTask) {
       const { error: taskError } = await supabase
         .from("task")
@@ -228,15 +313,8 @@ function TaskPage({ projectId }) {
         return;
       }
 
-      await supabase.from("task_profili").delete().eq("task_id", selectedTask.id);
-
-      if (selectedProfili.length > 0) {
-        const assegnazioni = selectedProfili.map((profiloId) => ({
-          task_id: selectedTask.id,
-          profilo_id: profiloId,
-        }));
-        await supabase.from("task_profili").insert(assegnazioni);
-      }
+      targetTaskId = selectedTask.id;
+      await supabase.from("task_profili").delete().eq("task_id", targetTaskId);
     } else {
       const { data: newTask, error: taskError } = await supabase
         .from("task")
@@ -249,13 +327,27 @@ function TaskPage({ projectId }) {
         return;
       }
 
-      if (newTask && selectedProfili.length > 0) {
-        const assegnazioni = selectedProfili.map((profiloId) => ({
-          task_id: newTask.id,
-          profilo_id: profiloId,
-        }));
-        await supabase.from("task_profili").insert(assegnazioni);
-      }
+      targetTaskId = newTask.id;
+    }
+
+    // Gestione Assegnazioni e invio notifiche in tempo reale
+    if (selectedProfili.length > 0) {
+      const assegnazioni = selectedProfili.map((profiloId) => ({
+        task_id: targetTaskId,
+        profilo_id: profiloId,
+      }));
+
+      await supabase.from("task_profili").insert(assegnazioni);
+
+      // Inserisce una notifica per ciascun utente assegnato
+      const notificheDaCreare = selectedProfili.map((profiloId) => ({
+        user_id: profiloId,
+        titolo: selectedTask ? "Task aggiornato" : "Nuovo task assegnato",
+        messaggio: `Ti è stato assegnato il task "${formData.titolo}".`,
+        letta: false
+      }));
+
+      await supabase.from("notifiche").insert(notificheDaCreare);
     }
 
     setIsModalOpen(false);
@@ -284,9 +376,89 @@ function TaskPage({ projectId }) {
       .eq("id", task.id);
 
     if (error) {
-      console.error("Errore aggiornamento stato:", error);
       alert(`Impossibile aggiornare lo stato: ${error.message}`);
       fetchTasks();
+    }
+  };
+
+  const handleAutoBalanceTasks = async () => {
+    try {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+      const workloadMap = {};
+      utenti.forEach((u) => {
+        workloadMap[u.id] = 0;
+      });
+
+      tasks.forEach((t) => {
+        const isDone = t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato";
+        if (!isDone && t.task_profili) {
+          t.task_profili.forEach((tp) => {
+            if (tp.profili?.id && workloadMap[tp.profili.id] !== undefined) {
+              workloadMap[tp.profili.id] += 1;
+            }
+          });
+        }
+      });
+
+      const availableUsers = utenti.filter((u) => (workloadMap[u.id] || 0) < 4);
+
+      if (availableUsers.length === 0) {
+        alert("Nessun membro disponibile con meno di 4 task aperti al momento!");
+        return;
+      }
+
+      const criticalTasks = tasks.filter((t) => {
+        const isDone = t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato";
+        if (!t.scadenza || isDone) return false;
+        const d = new Date(t.scadenza);
+        return d <= threeDaysFromNow;
+      });
+
+      if (criticalTasks.length === 0) {
+        alert("Non ci sono task in scadenza e a rilento da riassegnare");
+        return;
+      }
+
+      let reassignedCount = 0;
+
+      for (const task of criticalTasks) {
+        availableUsers.sort((a, b) => (workloadMap[a.id] || 0) - (workloadMap[b.id] || 0));
+        const chosenUser = availableUsers[0];
+
+        const alreadyAssigned = task.task_profili?.some((tp) => tp.profili?.id === chosenUser.id);
+
+        if (!alreadyAssigned) {
+          const { error } = await supabase.from("task_profili").insert([
+            {
+              task_id: task.id,
+              profilo_id: chosenUser.id,
+            },
+          ]);
+
+          if (!error) {
+            workloadMap[chosenUser.id] += 1;
+            reassignedCount++;
+            
+            // Invia notifica al nuovo utente assegnato
+            await supabase.from("notifiche").insert([
+              {
+                user_id: chosenUser.id,
+                titolo: "Task riassegnato (Bilanciamento)",
+                messaggio: `Ti è stato riassegnato il task critico "${task.titolo}".`,
+                letta: false
+              }
+            ]);
+          }
+        }
+      }
+
+      alert(`Bilanciamento completato! Assegnati ${reassignedCount} task critici.`);
+      fetchTasks();
+    } catch (err) {
+      console.error("Errore durante il bilanciamento automatico:", err);
     }
   };
 
@@ -348,12 +520,16 @@ function TaskPage({ projectId }) {
       nomeProgetto.includes(ricerca) ||
       assegnati.includes(ricerca);
 
-    if (priorityFilter === "Tutti") return matchesSearch;
+    if (!matchesSearch) return false;
+
+    if (priorityFilter === "Miei") {
+      return t.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
+    }
+
+    if (priorityFilter === "Tutti") return true;
 
     const valPriorita = (t.priorita || t.priority || "").toString().trim().toLowerCase();
-    const valFiltro = priorityFilter.toLowerCase().trim();
-
-    return matchesSearch && valPriorita === valFiltro;
+    return valPriorita === priorityFilter.toLowerCase().trim();
   });
 
   const tasksOrdinati = [...tasksFiltrati].sort((a, b) => {
@@ -435,6 +611,9 @@ function TaskPage({ projectId }) {
         </div>
 
         <div className="d-flex align-items-center gap-2">
+          <button className="add-new-task" onClick={handleAutoBalanceTasks} title="Bilancia task critici">
+            <b><i className="bi bi-robot me-1"></i>Bilancia Task</b>
+          </button>
           <button className="add-new-task" onClick={handleOpenCreateModal}>
             <b><i className="bi bi-plus me-1"></i>Crea Task</b>
           </button>
@@ -497,7 +676,7 @@ function TaskPage({ projectId }) {
           <input
             type="text"
             className="form-control bg-transparent border-0 ps-0 shadow-none"
-            placeholder="Cerca task per titolo, descrizione, progetto o persone..."
+            placeholder="Cerca task..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -505,18 +684,25 @@ function TaskPage({ projectId }) {
       </div>
 
       <div className="d-flex gap-2 mb-4 overflow-x-auto pb-1">
-        {["Tutti", "Alta", "Media", "Bassa"].map((p) => (
-          <button
-            key={p}
-            type="button"
-            className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${
-              priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"
-            }`}
-            onClick={() => setPriorityFilter(p)}
-          >
-            {p === "Tutti" ? "Tutti i Task" : `Priorità ${p}`}
-          </button>
-        ))}
+        {["Tutti", "Miei", "Alta", "Media", "Bassa"].map((p) => {
+          let label = p;
+          if (p === "Tutti") label = "Tutti i Task";
+          if (p === "Miei") label = "I Miei Task";
+          if (p !== "Tutti" && p !== "Miei") label = `Priorità ${p}`;
+
+          return (
+            <button
+              key={p}
+              type="button"
+              className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${
+                priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"
+              }`}
+              onClick={() => setPriorityFilter(p)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -610,11 +796,6 @@ function TaskPage({ projectId }) {
                           <option value="in_progress" className="bg-white text-dark">In Progress</option>
                           <option value="done" className="bg-white text-dark">Done</option>
                         </select>
-                        {!canEdit && (
-                          <span className="text-muted" title="Non hai i permessi per modificare questo task">
-                            <i className="bi bi-lock-fill small"></i>
-                          </span>
-                        )}
                       </div>
                     </td>
                   </tr>

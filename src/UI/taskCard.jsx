@@ -103,6 +103,22 @@ function TaskCard() {
         alert("Task creato, ma si è verificato un errore nell'assegnare i membri.");
         return;
       }
+
+      // Invio delle notifiche in tempo reale agli utenti assegnati
+      const notificheDaCreare = selectedProfili.map((profiloId) => ({
+        user_id: profiloId,
+        titolo: "Nuovo task assegnato",
+        messaggio: `Ti è stato assegnato il task "${formData.titolo}".`,
+        letta: false,
+      }));
+
+      const { error: notifError } = await supabase
+        .from("notifiche")
+        .insert(notificheDaCreare);
+
+      if (notifError) {
+        console.error("Errore nell'invio delle notifiche:", notifError);
+      }
     }
 
     setIsModalOpen(false);
