@@ -79,6 +79,9 @@ function Performance() {
     }
 
     const oraAttuale = new Date();
+    oraAttuale.setHours(0, 0, 0, 0);
+
+    const threeDaysFromNow = new Date(oraAttuale.getTime() + 3 * 24 * 60 * 60 * 1000);
 
     // A. Elaborazione Statistiche Membri
     const performanceData = profili.map((p) => {
@@ -100,10 +103,23 @@ function Performance() {
         const isCompleted =
           (t.stato || "").toLowerCase() === "done" || (t.stato || "").toLowerCase() === "completato";
         if (isCompleted || !t.scadenza) return false;
-        return new Date(t.scadenza) < oraAttuale;
+        const dScadenza = new Date(t.scadenza);
+        dScadenza.setHours(0, 0, 0, 0);
+        return dScadenza < oraAttuale;
       }).length;
 
       const tassoCompletamento = totali > 0 ? Math.round((completati / totali) * 100) : 0;
+
+      let indiceQualita = 0;
+      if (totali > 0) {
+        const baseScore = tassoCompletamento; 
+        const percentualeRitardo = (inRitardo / totali) * 100;
+        
+        indiceQualita = Math.round(baseScore - (percentualeRitardo * 0.5));
+        
+        if (indiceQualita < 0) indiceQualita = 0;
+        if (indiceQualita > 100) indiceQualita = 100;
+      }
 
       return {
         id: p.id,
@@ -117,10 +133,11 @@ function Performance() {
         daFare,
         inRitardo,
         tassoCompletamento,
+        indiceQualita,
       };
     });
 
-    // B. Elaborazione Statistiche Progetti & Task Incompleti
+    // B. Elaborazione Statistiche Progetti & Task Incompleti con filtro rigoroso
     const progettiDataFormatted = [];
     const tuttiTaskIncompleti = [];
 
@@ -135,25 +152,48 @@ function Performance() {
 
       const membriSet = new Map();
       taskDelProgetto.forEach((t) => {
-        // Cerca task non completati (stato diverso da done/completato)
         const statoTask = (t.stato || "").toLowerCase();
         if (statoTask !== "done" && statoTask !== "completato") {
           const dataCreazione = t.created_at ? new Date(t.created_at) : new Date();
+          dataCreazione.setHours(0, 0, 0, 0);
+          
           const giorniAperti = Math.floor((oraAttuale - dataCreazione) / (1000 * 60 * 60 * 24));
 
-          const membriAssegnati = t.task_profili
-            ? t.task_profili.map((tp) => tp.profili).filter(Boolean)
-            : [];
+          let isScaduto = false;
+          let isInScadenza = false;
 
-          tuttiTaskIncompleti.push({
-            id: t.id,
-            titolo: t.titolo || "Senza titolo",
-            stato: t.stato || "todo",
-            progettoNome: proj.nome,
-            giorniAperti: giorniAperti >= 0 ? giorniAperti : 0,
-            dataCreazione: t.created_at ? new Date(t.created_at).toLocaleDateString("it-IT") : "-",
-            membriAssegnati,
-          });
+          if (t.scadenza) {
+            const dataScadenza = new Date(t.scadenza);
+            dataScadenza.setHours(0, 0, 0, 0);
+            if (dataScadenza < oraAttuale) {
+              isScaduto = true;
+            } else if (dataScadenza >= oraAttuale && dataScadenza <= threeDaysFromNow) {
+              isInScadenza = true;
+            }
+          }
+
+          // Soglia per "aperto da parecchio tempo" (es. 14 giorni)
+          const isApertoDaTempo = giorniAperti >= 14;
+
+          // FILTRO RIGOROSO: Includiamo il task solo se rispetta almeno una delle condizioni critiche
+          if (isScaduto || isInScadenza || isApertoDaTempo) {
+            const membriAssegnati = t.task_profili
+              ? t.task_profili.map((tp) => tp.profili).filter(Boolean)
+              : [];
+
+            tuttiTaskIncompleti.push({
+              id: t.id,
+              titolo: t.titolo || "Senza titolo",
+              stato: t.stato || "todo",
+              progettoNome: proj.nome,
+              giorniAperti: giorniAperti >= 0 ? giorniAperti : 0,
+              dataCreazione: t.created_at ? new Date(t.created_at).toLocaleDateString("it-IT") : "-",
+              isScaduto,
+              isInScadenza,
+              isApertoDaTempo,
+              membriAssegnati,
+            });
+          }
         }
 
         if (t.task_profili) {
@@ -188,17 +228,19 @@ function Performance() {
   }, []);
 
   const leaderboard = [...stats].sort((a, b) => {
-    if (b.tassoCompletamento !== a.tassoCompletamento) {
-      return b.tassoCompletamento - a.tassoCompletamento;
+    if (b.indiceQualita !== a.indiceQualita) {
+      return b.indiceQualita - a.indiceQualita;
     }
-    if (b.completati !== a.completati) {
-      return b.completati - a.completati;
-    }
-    return a.inRitardo - b.inRitardo;
+    return b.completati - a.completati;
   });
 
   const progettiOrdinati = [...projectStats].sort((a, b) => b.avanzamento - a.avanzamento);
-  const taskIncompletiOrdinati = [...incompleteTasks].sort((a, b) => b.giorniAperti - a.giorniAperti);
+  
+  const taskIncompletiOrdinati = [...incompleteTasks].sort((a, b) => {
+    if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
+    if (a.isInScadenza !== b.isInScadenza) return a.isInScadenza ? -1 : 1;
+    return b.giorniAperti - a.giorniAperti;
+  });
 
   const renderRankBadge = (rank) => {
     switch (rank) {
@@ -335,18 +377,18 @@ function Performance() {
             )}
           </div>
 
-          {/* SEZIONE 2: TASK INCOMPLETI E GIORNI DALLA CREAZIONE */}
+          {/* SEZIONE 2: TASK CRITICI / INCOMPLETI */}
           <div className="card shadow-sm border-0 rounded-4 mb-5 p-4 bg-white">
             <div className="d-flex align-items-center justify-content-between mb-4">
-              <h4 className="fw-bold mb-0">Task Incompleti (Tempo dalla Creazione)</h4>
-              <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 rounded-pill">
-                Da Smaltire
+              <h4 className="fw-bold mb-0">Task Critici (Scaduti, In Scadenza o Aperti da Tempo)</h4>
+              <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 rounded-pill">
+                Richiedono Attenzione
               </span>
             </div>
 
             {taskIncompletiOrdinati.length === 0 ? (
               <div className="alert alert-success border-0 rounded-3">
-                Ottimo! Non ci sono task incompleti nel sistema. Tutti i task sono stati completati!
+                Ottimo! Non ci sono task critici o aperti da troppi giorni nel sistema.
               </div>
             ) : (
               <div className="table-responsive">
@@ -356,7 +398,7 @@ function Performance() {
                       <th>Task</th>
                       <th>Progetto</th>
                       <th>Membri Assegnati</th>
-                      <th className="text-center">Data Creazione</th>
+                      <th className="text-center">Motivo Criticità</th>
                       <th className="text-center">Giorni Aperti</th>
                       <th className="text-center">Stato</th>
                     </tr>
@@ -386,10 +428,26 @@ function Performance() {
                             </div>
                           )}
                         </td>
-                        <td className="text-center text-muted small">
-                          {t.dataCreazione}
+                        <td className="text-center">
+                          <div className="d-flex flex-column align-items-center gap-1">
+                            {t.isScaduto && (
+                              <span className="badge bg-danger text-white px-2 py-1">
+                                <i className="bi bi-exclamation-octagon me-1"></i>Scaduto
+                              </span>
+                            )}
+                            {t.isInScadenza && (
+                              <span className="badge bg-warning text-dark px-2 py-1">
+                                <i className="bi bi-clock me-1"></i>In Scadenza
+                              </span>
+                            )}
+                            {t.isApertoDaTempo && (
+                              <span className="badge bg-secondary text-white px-2 py-1">
+                                <i className="bi bi-hourglass-split me-1"></i>Aperto da tempo
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="text-center fw-bold text-danger">
+                        <td className="text-center fw-bold text-secondary">
                           {t.giorniAperti} giorni
                         </td>
                         <td className="text-center">
@@ -405,9 +463,15 @@ function Performance() {
             )}
           </div>
 
-          {/* SEZIONE 3: CLASSIFICA MEMBRI */}
+          {/* SEZIONE 3: CLASSIFICA TOP PERFORMER CON INDICE DI QUALITÀ IN % */}
           <div className="card shadow-sm border-0 rounded-4 mb-5 p-4 bg-white">
-            <h4 className="fw-bold mb-4">Classifica Top Performer (Membri)</h4>
+            <div className="d-flex align-items-center justify-content-between mb-4">
+              <h4 className="fw-bold mb-0">Classifica Top Performer (Membri)</h4>
+              <span className="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 rounded-pill">
+                Classificati per Indice di Qualità
+              </span>
+            </div>
+
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
                 <thead className="table-light">
@@ -416,7 +480,7 @@ function Performance() {
                     <th>Membro</th>
                     <th>Ruolo</th>
                     <th className="text-center">Task Completati</th>
-                    <th className="text-center">Tasso Completamento</th>
+                    <th className="text-center">Indice di Qualità</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -451,8 +515,8 @@ function Performance() {
                         {p.completati} / {p.totali}
                       </td>
                       <td className="text-center">
-                        <span className={`badge ${p.tassoCompletamento >= 80 ? 'bg-success' : p.tassoCompletamento >= 50 ? 'bg-warning text-dark' : 'bg-danger'} px-3 py-2 fs-6`}>
-                          {p.tassoCompletamento}%
+                        <span className={`badge ${p.indiceQualita >= 80 ? 'bg-success' : p.indiceQualita >= 50 ? 'bg-warning text-dark' : 'bg-danger'} px-3 py-2 fs-6`}>
+                          {p.indiceQualita}%
                         </span>
                       </td>
                     </tr>
@@ -462,7 +526,7 @@ function Performance() {
             </div>
           </div>
 
-          {/* SEZIONE 4: SCHEDE DI DETTAGLIO SINGOLI MEMBRI (Ripristinate) */}
+          {/* SEZIONE 4: SCHEDE DI DETTAGLIO SINGOLI MEMBRI */}
           <h4 className="fw-bold mb-3">Dettaglio Membri</h4>
           <div className="row g-4">
             {stats.map((p, index) => (
@@ -492,20 +556,20 @@ function Performance() {
 
                     <div className="mb-3">
                       <div className="d-flex justify-content-between small fw-bold mb-1">
-                        <span>Tasso Completamento</span>
-                        <span>{p.tassoCompletamento}%</span>
+                        <span>Indice di Qualità</span>
+                        <span>{p.indiceQualita}%</span>
                       </div>
                       <div className="progress" style={{ height: "10px" }}>
                         <div
                           className={`progress-bar ${
-                            p.tassoCompletamento >= 80
+                            p.indiceQualita >= 80
                               ? "bg-success"
-                              : p.tassoCompletamento >= 50
+                              : p.indiceQualita >= 50
                               ? "bg-warning"
                               : "bg-danger"
                           }`}
                           role="progressbar"
-                          style={{ width: `${p.tassoCompletamento}%` }}
+                          style={{ width: `${p.indiceQualita}%` }}
                         ></div>
                       </div>
                     </div>

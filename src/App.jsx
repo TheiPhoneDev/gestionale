@@ -14,6 +14,8 @@ import LoginPage from "./UI/LoginPage";
 import ClientsPage from "./UI/ClientsPage";
 import TeamManagement from "./UI/TeamManagement";
 import Performance from "./UI/Performance";
+import ProgettiList from "./UI/Projects";
+import ProgettoDettaglio from "./UI/ProjectsDetails";
 
 function App() {
   const [paginaMostrata, selezionaPaginaMostrata] = useState("dashboard");
@@ -30,13 +32,12 @@ function App() {
       setIsMobile(window.innerWidth < 768);
     };
 
-    checkMobile(); // Esegue il controllo al caricamento
-    window.addEventListener("resize", checkMobile); // Rileva il ridimensionamento
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
 
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Carica il profilo dell'utente loggato dalla tabella 'profili'
   const loadUserProfile = async (user) => {
     if (!user) {
       setCurrentUser(null);
@@ -63,7 +64,6 @@ function App() {
   };
 
   useEffect(() => {
-    // Controllo sessione iniziale
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
@@ -72,7 +72,6 @@ function App() {
       setLoadingAuth(false);
     });
 
-    // Ascolta cambi di stato auth (login/logout)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -87,7 +86,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Schermata di blocco per Dispositivi Mobile
   if (isMobile) {
     return (
       <div className="d-flex flex-column justify-content-center align-items-center vh-100 text-center p-4 bg-light">
@@ -104,7 +102,6 @@ function App() {
     );
   }
 
-  // Se l'autenticazione è in fase di caricamento
   if (loadingAuth) {
     return (
       <div className="d-flex justify-content-center align-items-center vh-100">
@@ -115,7 +112,6 @@ function App() {
     );
   }
 
-  // Se l'utente NON è loggato, mostra la pagina di Login
   if (!session) {
     return (
       <LoginPage onLoginSuccess={() => selezionaPaginaMostrata("dashboard")} />
@@ -124,12 +120,18 @@ function App() {
 
   // Routing delle pagine dell'applicazione
   const mostra = () => {
+    // Se la pagina attiva è un singolo progetto, mostra ProgettoDettaglio passandogli ID e funzione onBack[cite: 5]
     if (
       typeof paginaMostrata === "string" &&
       paginaMostrata.startsWith("progetto-")
     ) {
       const projectId = paginaMostrata.replace("progetto-", "");
-      return <TaskPage projectId={projectId} />;
+      return (
+        <ProgettoDettaglio 
+          progettoId={projectId} 
+          onBack={(destinazione) => selezionaPaginaMostrata(destinazione)} 
+        />
+      );
     }
 
     switch (paginaMostrata) {
@@ -137,6 +139,8 @@ function App() {
         return <Dashboard />;
       case "task":
         return <TaskPage />;
+      case "projects": 
+        return <ProgettiList onSelectProgetto={(destinazione) => selezionaPaginaMostrata(destinazione)} />;
       case "clienti":
         return <ClientsPage />;
       case "ganttChart":
