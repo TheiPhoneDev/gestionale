@@ -181,6 +181,14 @@ const sidebarElements = [
     color2: "#515151",
     adminOnly: false,
   },
+   {
+    id: "review",
+    icon: <i className="bi-clipboard-check"></i>,
+    label: "Review",
+    color: "#fff",
+    color2: "#515151",
+    adminOnly: false,
+  },
   {
     id: "clienti",
     icon: <i className="bi bi-people-fill"></i>,

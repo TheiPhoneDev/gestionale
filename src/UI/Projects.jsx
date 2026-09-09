@@ -13,6 +13,13 @@ function ProgettiList({ onSelectProgetto }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Stati per utente e filtri visibilità
+  const [currentProfileId, setCurrentProfileId] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState("");
+  const [projectFilter, setProjectFilter] = useState("Miei");
+
+  const isAdmin = currentUserRole?.toLowerCase() === "admin";
+
   // Stati per la gestione del modale Crea/Modifica
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProgetto, setCurrentProgetto] = useState(null);
@@ -29,9 +36,31 @@ function ProgettiList({ onSelectProgetto }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [progettoDaEliminare, setProgettoDaEliminare] = useState(null);
 
+  const fetchCurrentUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profiloData } = await supabase
+        .from("profili")
+        .select("id, ruolo")
+        .eq("id", user.id)
+        .single();
+
+      if (profiloData) {
+        setCurrentProfileId(profiloData.id);
+        setCurrentUserRole(profiloData.ruolo || "");
+        if ((profiloData.ruolo || "").toLowerCase() !== "admin") {
+          setProjectFilter("Miei");
+        }
+      } else {
+        setCurrentProfileId(user.id);
+      }
+    }
+  };
+
   const fetchProgettiEClienti = async () => {
     setLoading(true);
     
+    // Rimosso "creato_da" dalla query per evitare errori 400 sulla tabella
     const { data: projData, error: projError } = await supabase
       .from("progetti")
       .select(`
@@ -41,7 +70,11 @@ function ProgettiList({ onSelectProgetto }) {
         stato,
         cliente_id,
         clienti ( id, nome, azienda ),
-        task ( stato )
+        task ( 
+          id,
+          stato,
+          task_profili ( profilo_id )
+        )
       `);
 
     if (projError) {
@@ -62,7 +95,11 @@ function ProgettiList({ onSelectProgetto }) {
   };
 
   useEffect(() => {
-    fetchProgettiEClienti();
+    const init = async () => {
+      await fetchCurrentUserProfile();
+      await fetchProgettiEClienti();
+    };
+    init();
   }, []);
 
   const getEffectiveStatus = (proj) => {
@@ -191,7 +228,7 @@ function ProgettiList({ onSelectProgetto }) {
 
     if (error) {
       console.error("Errore eliminazione progetto:", error);
-      alert("Impossibile eliminare il progetto (potrebbero esserci task collegati).");
+      alert("Errore durante l'eliminazione del progetto.");
     } else {
       fetchProgettiEClienti();
     }
@@ -201,6 +238,15 @@ function ProgettiList({ onSelectProgetto }) {
   };
 
   const filteredProgetti = progetti.filter((p) => {
+    // Se non è admin o se è attivo il filtro "Miei", mostra il progetto solo se ha almeno un task assegnato all'utente
+    if (!isAdmin || projectFilter === "Miei") {
+      const hasMyTask = p.task?.some((t) =>
+        t.task_profili?.some((tp) => tp.profilo_id === currentProfileId)
+      );
+      if (!hasMyTask) return false;
+    }
+
+    // Filtro di ricerca testuale
     const nomeProj = (p.nome || "").toLowerCase();
     const clienteNome = (p.clienti?.nome || "").toLowerCase();
     const clienteAzienda = (p.clienti?.azienda || "").toLowerCase();
@@ -213,13 +259,17 @@ function ProgettiList({ onSelectProgetto }) {
     );
   });
 
+  const filterOptions = isAdmin ? ["Tutti", "Miei"] : ["Miei"];
+
   return (
     <div className="container pt-4 mb-5">
       <div className="card shadow-sm border-0 rounded-4 p-4 bg-white">
         
         {/* Intestazione con Titolo e Pulsante Nuovo Progetto in alto */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
-          <h4 className="fw-bold mb-0">Lista Progetti</h4>
+          <h4 className="fw-bold mb-0">
+            {isAdmin && projectFilter === "Tutti" ? "Tutti i Progetti" : "I Miei Progetti"}
+          </h4>
           
           <button className="add-new-task" onClick={handleOpenCreate}>
             <b>
@@ -228,7 +278,23 @@ function ProgettiList({ onSelectProgetto }) {
           </button>
         </div>
 
-        {/* Barra di ricerca moderna posizionata sotto il titolo */}
+        {/* Pulsanti filtro "Tutti i progetti" / "I miei progetti" (visibili per gli admin) */}
+        {isAdmin && (
+          <div className="d-flex gap-2 mb-3">
+            {filterOptions.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${projectFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"}`}
+                onClick={() => setProjectFilter(p)}
+              >
+                {p === "Tutti" ? "Tutti i progetti" : "I miei progetti"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Barra di ricerca moderna */}
         <div className="mb-4">
           <div className="input-group shadow-sm rounded-pill overflow-hidden border bg-light" style={{ maxWidth: "450px" }}>
             <span className="input-group-text bg-transparent border-0 ps-3">

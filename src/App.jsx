@@ -16,6 +16,7 @@ import TeamManagement from "./UI/TeamManagement";
 import Performance from "./UI/Performance";
 import ProgettiList from "./UI/Projects";
 import ProgettoDettaglio from "./UI/ProjectsDetails";
+import Review from "./UI/Review";
 
 function App() {
   const [paginaMostrata, selezionaPaginaMostrata] = useState("dashboard");
@@ -145,6 +146,8 @@ function App() {
         return <ClientsPage />;
       case "ganttChart":
         return <Gantt />;
+      case "review":
+        return <Review />;
       case "team":
         return <TeamManagement />;
       case "performance":

@@ -27,22 +27,18 @@ function TaskPage({ projectId }) {
   const [selectedProfili, setSelectedProfili] = useState([]);
   const [selectedProjectLabel, setSelectedProjectLabel] = useState("Seleziona progetto");
 
-  // Stati per il modale di visualizzazione dettagli task
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
 
-  // Stati per il modale di bilanciamento / gestione mirata
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [balanceRole, setBalanceRole] = useState("Tutti");
-  const [balanceScope, setBalanceScope] = useState("scaduti"); // "scaduti", "in_scadenza", "tutti"
+  const [balanceScope, setBalanceScope] = useState("scaduti");
 
-  // Stati per Note e Allegati nel Dettaglio
   const [noteList, setNoteList] = useState([]);
   const [nuovaNota, setNuovaNota] = useState("");
   const [allegatiList, setAllegatiList] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  // Stato per i file da caricare nel form di creazione/modifica
   const [pendingFiles, setPendingFiles] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -161,6 +157,19 @@ function TaskPage({ projectId }) {
     setIsDetailModalOpen(true);
   };
 
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return;
+
+    const { error } = await supabase.from("task").delete().eq("id", taskId);
+
+    if (error) {
+      alert("Errore durante l'eliminazione del task: " + error.message);
+    } else {
+      setIsDetailModalOpen(false);
+      fetchTasks();
+    }
+  };
+
   const handleAddNota = async (e) => {
     e.preventDefault();
     if (!nuovaNota.trim() || !detailTask) return;
@@ -231,6 +240,12 @@ function TaskPage({ projectId }) {
 
   const removePendingFile = (indexToRemove) => {
     setPendingFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const toggleProfilo = (profiloId) => {
+    setSelectedProfili((prev) =>
+      prev.includes(profiloId) ? prev.filter((id) => id !== profiloId) : [...prev, profiloId]
+    );
   };
 
   const handleOpenCreateModal = () => {
@@ -369,7 +384,6 @@ function TaskPage({ projectId }) {
     await supabase.from("task").update({ stato: newStatus }).eq("id", task.id);
   };
 
-  // --- LOGICA DI BILANCIAMENTO TASK ---
   const handleAssignSingleTask = async (taskId, taskTitolo, targetUserId) => {
     if (!targetUserId) {
       alert("Nessun utente valido selezionato per la riassegnazione.");
@@ -458,7 +472,6 @@ function TaskPage({ projectId }) {
   };
 
   const modalTaskList = getFilteredTasksForModal();
-  // ------------------------------------
 
   const getStatusBadgeStyle = (stato) => {
     switch (stato?.toLowerCase()) {
@@ -488,7 +501,11 @@ function TaskPage({ projectId }) {
     const ricerca = searchTerm ? searchTerm.toLowerCase().trim() : "";
     const titolo = (t.titolo || "").toLowerCase();
     const descrizione = (t.descrizione || "").toLowerCase();
-    const matchesSearch = !ricerca || titolo.includes(ricerca) || descrizione.includes(ricerca);
+    const assegnati = t.task_profili
+      ? t.task_profili.map((tp) => `${tp.profili?.nome || ""} ${tp.profili?.cognome || ""}`).join(" ").toLowerCase()
+      : "";
+
+    const matchesSearch = !ricerca || titolo.includes(ricerca) || descrizione.includes(ricerca) || assegnati.includes(ricerca);
     if (!matchesSearch) return false;
 
     if (priorityFilter === "Miei") return t.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
@@ -507,6 +524,27 @@ function TaskPage({ projectId }) {
   });
 
   const filterOptions = isAdmin ? ["Tutti", "Miei", "Alta", "Media", "Bassa"] : ["Miei", "Alta", "Media", "Bassa"];
+
+  // Metriche complete
+  const totalTasks = tasksFiltrati.length;
+  const doneTasks = tasksFiltrati.filter((t) => ["done", "completato"].includes(t.stato?.toLowerCase())).length;
+  const inProgressTasks = tasksFiltrati.filter((t) => ["in_progress", "in_corso"].includes(t.stato?.toLowerCase())).length;
+  
+  const expTasks = tasksFiltrati.filter((t) => {
+    if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
+    const d = new Date(t.scadenza);
+    d.setHours(0, 0, 0, 0);
+    return d >= now && d <= threeDaysFromNow;
+  }).length;
+
+  const overdueTasks = tasksFiltrati.filter((t) => {
+    if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
+    const d = new Date(t.scadenza);
+    d.setHours(0, 0, 0, 0);
+    return d < now;
+  }).length;
+
+  const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (
     <div className="container mt-4">
@@ -530,8 +568,72 @@ function TaskPage({ projectId }) {
         </div>
       </div>
 
+      {/* CARD DELLE METRICHE (Con Totale, In Corso, In Scadenza, Scaduti e Completati) */}
+      <div className="row g-3 mb-4">
+        <div className="col-6 col-md-2">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Totale</span>
+              <span className="h4 fw-bold mb-0">{totalTasks}</span>
+            </div>
+            <div className="bg-light rounded-circle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-list-task fs-5"></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-md-2">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">In Corso</span>
+              <span className="h4 fw-bold mb-0 text-warning">{inProgressTasks}</span>
+            </div>
+            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-hourglass-split fs-5"></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-md-2">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">In Scadenza</span>
+              <span className="h4 fw-bold mb-0 text-warning">{expTasks}</span>
+            </div>
+            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-clock-history fs-5"></i>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-6 col-md-2">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Scaduti</span>
+              <span className="h4 fw-bold mb-0 text-danger">{overdueTasks}</span>
+            </div>
+            <div className="bg-danger-subtle rounded-circle text-danger d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-exclamation-triangle fs-5"></i>
+            </div>
+          </div>
+        </div>
+
+        {/* Card Completati Ripristinata */}
+        <div className="col-12 col-md-4">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Completati</span>
+              <span className="h4 fw-bold mb-0 text-success">{doneTasks} <span className="fs-6 text-muted fw-normal">({completionRate}%)</span></span>
+            </div>
+            <div className="bg-success-subtle rounded-circle text-success d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-check-circle-fill fs-5"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mb-3">
-        <div className="input-group search-bar-clean align-items-center">
+        <div className="input-group search-bar-clean align-items-center bg-white rounded-3 px-3 py-1 shadow-sm">
           <span className="bg-transparent border-0 pe-2"><i className="bi bi-search text-muted"></i></span>
           <input
             type="text"
@@ -544,22 +646,29 @@ function TaskPage({ projectId }) {
       </div>
 
       <div className="d-flex gap-2 mb-4 overflow-x-auto pb-1">
-        {filterOptions.map((p) => (
-          <button
-            key={p}
-            type="button"
-            className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"}`}
-            onClick={() => setPriorityFilter(p)}
-          >
-            {p === "Tutti" ? "Tutti i Task" : p === "Miei" ? "I Miei Task" : `Priorità ${p}`}
-          </button>
-        ))}
+        {filterOptions.map((p) => {
+          let label = p;
+          if (p === "Tutti") label = "Tutti i Task";
+          if (p === "Miei") label = "I Miei Task";
+          if (p !== "Tutti" && p !== "Miei") label = `Priorità ${p}`;
+
+          return (
+            <button
+              key={p}
+              type="button"
+              className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"}`}
+              onClick={() => setPriorityFilter(p)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
         <div className="text-center my-5"><div className="spinner-border text-primary" role="status"></div></div>
       ) : tasksOrdinati.length === 0 ? (
-        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4">Nessun task trovato.</div>
+        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4 bg-white shadow-sm">Nessun task trovato.</div>
       ) : (
         <div className="table-responsive shadow-sm rounded-4 border-0">
           <table className="table table-hover align-middle mb-0 bg-white">
@@ -592,11 +701,15 @@ function TaskPage({ projectId }) {
                     <td className="py-3">
                       {t.task_profili?.length > 0 ? (
                         <div className="d-flex flex-wrap gap-1">
-                          {t.task_profili.map((tp, idx) => (
-                            <span key={idx} className="badge bg-light text-secondary border-0 rounded-pill px-3 py-2 fw-normal">
-                              {tp.profili?.nome} {tp.profili?.cognome}
-                            </span>
-                          ))}
+                          {t.task_profili.map((tp, idx) => {
+                            const isMe = tp.profili?.id === currentProfileId;
+                            return (
+                              <span key={tp.profili?.id || idx} className={`badge ${isMe ? 'bg-primary text-white' : 'bg-light text-secondary'} border-0 rounded-pill px-3 py-2`}>
+                                <i className="bi bi-person me-1"></i>
+                                {tp.profili?.nome} {tp.profili?.cognome} {isMe && "(Tu)"}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : <span className="text-muted small">Nessuno</span>}
                     </td>
@@ -622,7 +735,7 @@ function TaskPage({ projectId }) {
         </div>
       )}
 
-      {/* MODALE BILANCIAMENTO E LISTA CANDIDATI */}
+      {/* MODALE BILANCIAMENTO */}
       <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)}>
         <div className="p-3" style={{ maxHeight: "80vh", overflowY: "auto" }}>
           <h3 className="modal-title mb-3">
@@ -777,7 +890,6 @@ function TaskPage({ projectId }) {
               </div>
             </div>
 
-            {/* SEZIONE ALLEGATI */}
             <div className="mb-4">
               <span className="text-muted small d-block mb-2 fw-semibold text-uppercase">Allegati (Doc / Immagini)</span>
               <div className="d-flex flex-wrap gap-2 mb-2">
@@ -804,7 +916,6 @@ function TaskPage({ projectId }) {
               </div>
             </div>
 
-            {/* SEZIONE NOTE / COMMENTI */}
             <div className="mb-4">
               <span className="text-muted small d-block mb-2 fw-semibold text-uppercase">Note e Commenti</span>
               <div className="d-flex flex-column gap-2 mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
@@ -834,15 +945,28 @@ function TaskPage({ projectId }) {
               </form>
             </div>
 
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="add-new-task" style={{ backgroundColor: "#dc3545", color: "#fff" }} onClick={() => setIsDetailModalOpen(false)}>
-                <b>Chiudi</b>
-              </button>
-              {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) && (
-                <button type="button" className="add-new-task" onClick={() => handleOpenEditFromDetail(detailTask)}>
-                  <b>Modifica Task</b>
+            <div className="d-flex justify-content-between align-items-center">
+              {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) ? (
+                <button 
+                  type="button" 
+                  className="add-new-task" 
+                  style={{ backgroundColor: "#dc3545", color: "#fff" }} 
+                  onClick={() => handleDeleteTask(detailTask.id)}
+                >
+                  <b><i className="bi bi-trash me-1"></i>Elimina Task</b>
                 </button>
-              )}
+              ) : <div></div>}
+
+              <div className="d-flex gap-2">
+                <button type="button" className="add-new-task" style={{ backgroundColor: "#6c757d", color: "#fff" }} onClick={() => setIsDetailModalOpen(false)}>
+                  <b>Chiudi</b>
+                </button>
+                {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) && (
+                  <button type="button" className="add-new-task" onClick={() => handleOpenEditFromDetail(detailTask)}>
+                    <b>Modifica Task</b>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -857,6 +981,24 @@ function TaskPage({ projectId }) {
               <label className="form-label fw-semibold">Titolo *</label>
               <input type="text" name="titolo" value={formData.titolo} onChange={handleInputChange} className="form-control" required />
             </div>
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Progetto di riferimento</label>
+              <select
+                name="progetto_id"
+                value={formData.progetto_id}
+                onChange={handleInputChange}
+                className="form-select"
+              >
+                <option value="">Nessun progetto (Task indipendente)</option>
+                {progetti.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="row g-3 mb-3">
               <div className="col-md-6">
                 <label className="form-label fw-semibold">Priorità</label>
@@ -871,6 +1013,46 @@ function TaskPage({ projectId }) {
                 <input type="date" name="scadenza" value={formData.scadenza} onChange={handleInputChange} className="form-control" />
               </div>
             </div>
+
+            {selectedTask && (
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Stato</label>
+                <select name="stato" value={formData.stato} onChange={handleInputChange} className="form-select">
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+              </div>
+            )}
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold d-block">
+                Assegna a membri del team:
+              </label>
+              <div className="d-flex flex-wrap gap-2 p-3 rounded-3 bg-light border-0">
+                {utenti.length === 0 ? (
+                  <span className="text-muted small">Nessun membro trovato</span>
+                ) : (
+                  utenti.map((member) => {
+                    const isSelected = selectedProfili.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        className={`badge-pill-clean btn btn-sm ${
+                          isSelected ? "btn-dark text-white" : "btn-outline-secondary border-0 bg-white"
+                        }`}
+                        onClick={() => toggleProfilo(member.id)}
+                      >
+                        <i className={`bi bi-${isSelected ? "check-circle-fill text-success" : "plus-circle"} me-1`}></i>
+                        {member.nome} {member.cognome}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
             <div className="mb-3">
               <label className="form-label fw-semibold">Descrizione</label>
               <textarea name="descrizione" value={formData.descrizione} onChange={handleInputChange} className="form-control" rows="3" />

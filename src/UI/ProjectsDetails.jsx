@@ -10,7 +10,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Stati originali ereditati da TaskPage
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("Tutti");
   const [utenti, setUtenti] = useState([]);
@@ -23,22 +22,18 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   const [selectedProfili, setSelectedProfili] = useState([]);
   const [selectedProjectLabel, setSelectedProjectLabel] = useState("Seleziona progetto");
 
-  // Stati per il modale di visualizzazione dettagli task
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
 
-  // Stati per il modale di bilanciamento / gestione mirata (Presi da TaskPage)
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [balanceRole, setBalanceRole] = useState("Tutti");
-  const [balanceScope, setBalanceScope] = useState("scaduti"); // "scaduti", "in_scadenza", "tutti"
+  const [balanceScope, setBalanceScope] = useState("scaduti");
 
-  // Stati per Note e Allegati nel Dettaglio
   const [noteList, setNoteList] = useState([]);
   const [nuovaNota, setNuovaNota] = useState("");
   const [allegatiList, setAllegatiList] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  // Stato per i file da caricare nel form di creazione/modifica
   const [pendingFiles, setPendingFiles] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -132,6 +127,19 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     setIsDetailModalOpen(true);
   };
 
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return;
+
+    const { error } = await supabase.from("task").delete().eq("id", taskId);
+
+    if (error) {
+      alert("Errore durante l'eliminazione del task: " + error.message);
+    } else {
+      setIsDetailModalOpen(false);
+      fetchDettaglioProgetto();
+    }
+  };
+
   const handleAddNota = async (e) => {
     e.preventDefault();
     if (!nuovaNota.trim() || !detailTask) return;
@@ -218,7 +226,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       descrizione: task.descrizione || "",
       scadenza: task.scadenza ? task.scadenza.split("T")[0] : "",
       priorita: task.priorita || "Media",
-      progetto_id: task.progetti ? task.progetti.id : progettoId,
+      progetto_id: progettoId,
       stato: task.stato || "todo",
     });
 
@@ -298,7 +306,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       descrizione: formData.descrizione,
       scadenza: formData.scadenza || null,
       priorita: formData.priorita,
-      progetto_id: progettoId,
+      progetto_id: progettoId || null,
       stato: formData.stato,
     };
 
@@ -385,7 +393,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     await supabase.from("task").update({ stato: newStatus }).eq("id", task.id);
   };
 
-  // Funzioni di bilanciamento mirato importate da TaskPage
   const handleAssignSingleTask = async (taskId, taskTitolo, targetUserId) => {
     if (!targetUserId) {
       alert("Nessun utente valido selezionato per la riassegnazione.");
@@ -537,7 +544,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   
   const expTasks = tasksFiltrati.filter((t) => {
     if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
-    return new Date(t.scadenza) <= threeDaysFromNow;
+    const d = new Date(t.scadenza);
+    d.setHours(0, 0, 0, 0);
+    return d >= now && d <= threeDaysFromNow;
+  }).length;
+
+  const overdueTasks = tasksFiltrati.filter((t) => {
+    if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
+    const d = new Date(t.scadenza);
+    d.setHours(0, 0, 0, 0);
+    return d < now;
   }).length;
 
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
@@ -595,48 +611,60 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         </div>
       </div>
 
+      {/* METRICHE (Con Card Completati Ripristinata) */}
       <div className="row g-3 mb-4">
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-md-2">
           <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
             <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">Totale Task</span>
+              <span className="text-muted small d-block text-truncate">Totale</span>
               <span className="h4 fw-bold mb-0">{totalTasks}</span>
             </div>
-            <div className="bg-light rounded-circle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
-              <i className="bi bi-list-task fs-4"></i>
+            <div className="bg-light rounded-circle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-list-task fs-5"></i>
             </div>
           </div>
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-md-2">
           <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
             <div className="me-2 overflow-hidden">
               <span className="text-muted small d-block text-truncate">In Corso</span>
               <span className="h4 fw-bold mb-0 text-warning">{inProgressTasks}</span>
             </div>
-            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
-              <i className="bi bi-hourglass-split fs-4"></i>
+            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-hourglass-split fs-5"></i>
             </div>
           </div>
         </div>
-        <div className="col-6 col-md-3">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">Completati ({completionRate}%)</span>
-              <span className="h4 fw-bold mb-0 text-success">{doneTasks}</span>
-            </div>
-            <div className="bg-success-subtle rounded-circle text-success d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
-              <i className="bi bi-check-circle fs-4"></i>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-3">
+        <div className="col-6 col-md-2">
           <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
             <div className="me-2 overflow-hidden">
               <span className="text-muted small d-block text-truncate">In Scadenza</span>
-              <span className="h4 fw-bold mb-0 text-danger">{expTasks}</span>
+              <span className="h4 fw-bold mb-0 text-warning">{expTasks}</span>
             </div>
-            <div className="bg-danger-subtle rounded-circle text-danger d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "48px", height: "48px" }}>
-              <i className="bi bi-exclamation-triangle fs-4"></i>
+            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-clock-history fs-5"></i>
+            </div>
+          </div>
+        </div>
+        <div className="col-6 col-md-2">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Scaduti</span>
+              <span className="h4 fw-bold mb-0 text-danger">{overdueTasks}</span>
+            </div>
+            <div className="bg-danger-subtle rounded-circle text-danger d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-exclamation-triangle fs-5"></i>
+            </div>
+          </div>
+        </div>
+        <div className="col-12 col-md-4">
+          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
+            <div className="me-2 overflow-hidden">
+              <span className="text-muted small d-block text-truncate">Completati</span>
+              <span className="h4 fw-bold mb-0 text-success">{doneTasks} <span className="fs-6 text-muted fw-normal">({completionRate}%)</span></span>
+            </div>
+            <div className="bg-success-subtle rounded-circle text-success d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
+              <i className="bi bi-check-circle-fill fs-5"></i>
             </div>
           </div>
         </div>
@@ -763,7 +791,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         </div>
       )}
 
-      {/* MODALE BILANCIAMENTO E LISTA CANDIDATI (Preso da TaskPage) */}
+      {/* MODALE BILANCIAMENTO */}
       <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)}>
         <div className="p-3" style={{ maxHeight: "80vh", overflowY: "auto" }}>
           <h3 className="modal-title mb-3">
@@ -973,15 +1001,28 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               </form>
             </div>
 
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" className="add-new-task" style={{ backgroundColor: "#dc3545", color: "#fff" }} onClick={() => setIsDetailModalOpen(false)}>
-                <b>Chiudi</b>
-              </button>
-              {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) && (
-                <button type="button" className="add-new-task" onClick={() => handleOpenEditFromDetail(detailTask)}>
-                  <b>Modifica Task</b>
+            <div className="d-flex justify-content-between align-items-center">
+              {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) ? (
+                <button 
+                  type="button" 
+                  className="add-new-task" 
+                  style={{ backgroundColor: "#dc3545", color: "#fff" }} 
+                  onClick={() => handleDeleteTask(detailTask.id)}
+                >
+                  <b><i className="bi bi-trash me-1"></i>Elimina Task</b>
                 </button>
-              )}
+              ) : <div></div>}
+
+              <div className="d-flex gap-2">
+                <button type="button" className="add-new-task" style={{ backgroundColor: "#6c757d", color: "#fff" }} onClick={() => setIsDetailModalOpen(false)}>
+                  <b>Chiudi</b>
+                </button>
+                {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) && (
+                  <button type="button" className="add-new-task" onClick={() => handleOpenEditFromDetail(detailTask)}>
+                    <b>Modifica Task</b>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1005,6 +1046,19 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 className="form-control"
                 required
               />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Progetto di riferimento</label>
+              <select
+                name="progetto_id"
+                value={progettoId}
+                disabled
+                className="form-select bg-light"
+              >
+                <option value={progettoId}>{progetto?.nome || "Progetto corrente"}</option>
+              </select>
+              <div className="form-text text-muted small">Il task verrà creato automaticamente all'interno di questo progetto.</div>
             </div>
 
             <div className="row g-3 mb-3">
@@ -1069,7 +1123,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                         }`}
                         onClick={() => toggleProfilo(member.id)}
                       >
-                        <i className={`bi bi-${isSelected ? "check-circle-fill" : "plus-circle"} me-1`}></i>
+                        <i className={`bi bi-${isSelected ? "check-circle-fill text-success" : "plus-circle"} me-1`}></i>
                         {member.nome} {member.cognome}
                       </button>
                     );
