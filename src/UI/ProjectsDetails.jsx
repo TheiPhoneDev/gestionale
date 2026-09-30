@@ -1,29 +1,36 @@
-import React, { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
-import "bootstrap/dist/css/bootstrap.css";
+import "../App.css";
+import "./TaskPage.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
-import Dropdown from "react-bootstrap/Dropdown";
+
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { supabase } from "../supabaseClient";
 import Modal from "./Modal";
 
 function ProgettoDettaglio({ progettoId, onBack }) {
-  const [progetto, setProgetto] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [progetto, setProgetto] = useState(null);
+  const [nomeProgetto, setNomeProgetto] = useState("");
+  const [nomeAzienda, setNomeAzienda] = useState("");
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("Tutti");
+  const [priorityFilter, setPriorityFilter] = useState("Miei");
+
   const [utenti, setUtenti] = useState([]);
-  const [progettiList, setProgettiList] = useState([]);
+
   const [currentProfileId, setCurrentProfileId] = useState(null);
   const [currentUserRole, setCurrentUserRole] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [selectedProfili, setSelectedProfili] = useState([]);
-  const [selectedProjectLabel, setSelectedProjectLabel] = useState("Seleziona progetto");
 
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [detailTask, setDetailTask] = useState(null);
+  const [selectedProfili, setSelectedProfili] = useState([]);
 
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [balanceRole, setBalanceRole] = useState("Tutti");
@@ -31,10 +38,21 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   const [noteList, setNoteList] = useState([]);
   const [nuovaNota, setNuovaNota] = useState("");
+
   const [allegatiList, setAllegatiList] = useState([]);
   const [uploadingFile, setUploadingFile] = useState(false);
 
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [pendingPreviewUrls, setPendingPreviewUrls] = useState({});
+
+  /*
+   * Manteniamo gli ObjectURL anche in una ref.
+   * In questo modo possiamo revocarli senza problemi
+   * di closure/stato obsoleto.
+   */
+  const pendingPreviewUrlsRef = useRef({});
+
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [formData, setFormData] = useState({
     titolo: "",
@@ -45,1138 +63,3629 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     stato: "todo",
   });
 
-  const isAdmin = currentUserRole?.toLowerCase() === "admin";
+  const isAdmin =
+    (currentUserRole || "").trim().toLowerCase() === "admin";
 
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+  /*
+   * ============================================================
+   * UTILITY
+   * ============================================================
+   */
 
-      if (user) {
-        const { data: profiloData } = await supabase
-          .from("profili")
-          .select("id, ruolo")
-          .eq("id", user.id)
-          .single();
-
-        if (profiloData) {
-          setCurrentProfileId(profiloData.id);
-          setCurrentUserRole(profiloData.ruolo || "");
-        } else {
-          setCurrentProfileId(user.id);
-        }
-      }
-
-      await fetchDettaglioProgetto();
-      await fetchDropdownData();
-      setLoading(false);
-    };
-
-    if (progettoId) {
-      init();
-    }
-  }, [progettoId]);
-
-  const fetchDettaglioProgetto = async () => {
-    const { data: projData, error: projError } = await supabase
-      .from("progetti")
-      .select(`id, nome, stato, clienti ( nome, azienda ), task ( stato )`)
-      .eq("id", progettoId)
-      .single();
-
-    if (!projError && projData) {
-      setProgetto(projData);
-    }
-
-    const { data: taskData, error: taskError } = await supabase
-      .from("task")
-      .select(`
-        *,
-        progetti ( id, nome ),
-        creatore:profili!creato_da ( id, nome, cognome ),
-        task_profili (
-          profili ( id, nome, cognome, ruolo )
-        )
-      `)
-      .eq("progetto_id", progettoId);
-
-    if (!taskError) {
-      setTasks(taskData || []);
-    }
+  const normalizeStatus = (status) => {
+    return (status || "").toString().trim().toLowerCase();
   };
 
-  const fetchTaskDetailsExtra = async (taskId) => {
-    const { data: notesData } = await supabase
-      .from("task_note")
-      .select(`*, profili ( id, nome, cognome )`)
-      .eq("task_id", taskId)
-      .order("created_at", { ascending: true });
-    setNoteList(notesData || []);
+  const isDone = (task) => {
+    const status = normalizeStatus(task?.stato);
 
-    const { data: filesData } = await supabase
-      .from("task_allegati")
-      .select("*")
-      .eq("task_id", taskId)
-      .order("created_at", { ascending: false });
-    setAllegatiList(filesData || []);
-  };
-
-  const handleRowClick = async (task) => {
-    setDetailTask(task);
-    await fetchTaskDetailsExtra(task.id);
-    setIsDetailModalOpen(true);
-  };
-
-  const handleDeleteTask = async (taskId) => {
-    if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return;
-
-    const { error } = await supabase.from("task").delete().eq("id", taskId);
-
-    if (error) {
-      alert("Errore durante l'eliminazione del task: " + error.message);
-    } else {
-      setIsDetailModalOpen(false);
-      fetchDettaglioProgetto();
-    }
-  };
-
-  const handleAddNota = async (e) => {
-    e.preventDefault();
-    if (!nuovaNota.trim() || !detailTask) return;
-
-    const { error } = await supabase.from("task_note").insert([
-      {
-        task_id: detailTask.id,
-        profilo_id: currentProfileId,
-        testo: nuovaNota.trim(),
-      },
-    ]);
-
-    if (!error) {
-      setNuovaNota("");
-      fetchTaskDetailsExtra(detailTask.id);
-    } else {
-      alert("Errore nell'invio della nota: " + error.message);
-    }
-  };
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !detailTask) return;
-
-    setUploadingFile(true);
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-    const filePath = `${detailTask.id}/${fileName}`;
-
-    try {
-      const { error: uploadError } = await supabase.storage
-        .from("task-attachments")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from("task-attachments")
-        .getPublicUrl(filePath);
-
-      const { error: dbError } = await supabase.from("task_allegati").insert([
-        {
-          task_id: detailTask.id,
-          nome_file: file.name,
-          url_file: publicUrlData.publicUrl,
-          tipo_file: file.type,
-        },
-      ]);
-
-      if (dbError) throw dbError;
-
-      fetchTaskDetailsExtra(detailTask.id);
-    } catch (err) {
-      alert("Errore durante il caricamento del file: " + err.message);
-    } finally {
-      setUploadingFile(false);
-      e.target.value = null;
-    }
-  };
-
-  const handlePendingFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      setPendingFiles((prev) => [...prev, ...files]);
-    }
-    e.target.value = null;
-  };
-
-  const removePendingFile = (indexToRemove) => {
-    setPendingFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
-  const handleOpenEditFromDetail = (task) => {
-    setIsDetailModalOpen(false);
-    const isAssigned = task.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
-    if (!isAssigned && !isAdmin) {
-      alert("Non hai i permessi per modificare questo task.");
-      return;
-    }
-
-    setSelectedTask(task);
-    setFormData({
-      titolo: task.titolo || "",
-      descrizione: task.descrizione || "",
-      scadenza: task.scadenza ? task.scadenza.split("T")[0] : "",
-      priorita: task.priorita || "Media",
-      progetto_id: progettoId,
-      stato: task.stato || "todo",
-    });
-
-    setSelectedProjectLabel(progetto?.nome || "Seleziona progetto");
-
-    const attualiMembriIds = task.task_profili
-      ? task.task_profili.map((tp) => tp.profili?.id).filter(Boolean)
-      : [];
-    setSelectedProfili(attualiMembriIds);
-    setPendingFiles([]);
-    setIsModalOpen(true);
-  };
-
-  const getEffectiveStatus = (proj, currentTasks) => {
-    const taskList = currentTasks || proj?.task || [];
-    if (taskList.length > 0) {
-      const allDone = taskList.every((t) => {
-        const s = (t.stato || "").toLowerCase();
-        return s === "done" || s === "completato";
-      });
-      if (allDone) return "Completato";
-    }
-    return proj?.stato || "In corso";
-  };
-
-  const fetchDropdownData = async () => {
-    const { data: utentiData } = await supabase
-      .from("profili")
-      .select("id, nome, cognome, ruolo");
-    if (utentiData) setUtenti(utentiData);
-
-    const { data: progettiData } = await supabase
-      .from("progetti")
-      .select("id, nome");
-    if (progettiData) setProgettiList(progettiData);
-  };
-
-  const toggleProfilo = (profiloId) => {
-    setSelectedProfili((prev) =>
-      prev.includes(profiloId) ? prev.filter((id) => id !== profiloId) : [...prev, profiloId]
+    return (
+      status === "done" ||
+      status === "completato" ||
+      status === "completed"
     );
   };
 
-  const handleOpenCreateModal = () => {
-    setSelectedTask(null);
-    setFormData({
-      titolo: "",
-      descrizione: "",
-      scadenza: "",
-      priorita: "Media",
-      progetto_id: progettoId || "",
-      stato: "todo",
+  const isInProgress = (task) => {
+    const status = normalizeStatus(task?.stato);
+
+    return (
+      status === "in_progress" ||
+      status === "in_corso" ||
+      status === "in progress"
+    );
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    return date.toLocaleDateString("it-IT");
+  };
+
+  const formatDateInput = (value) => {
+    if (!value) return "";
+
+    return String(value).split("T")[0];
+  };
+
+  /*
+   * ============================================================
+   * UTILITY FILE
+   * ============================================================
+   */
+
+  const isImageFile = (file) => {
+    if (!file) return false;
+
+    return (
+      file.type?.startsWith("image/") ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
+        file.name || ""
+      )
+    );
+  };
+
+  const getPendingFileKey = (file) => {
+    return `${file.name}-${file.lastModified}-${file.size}`;
+  };
+
+  const getFileIcon = (
+    fileName = "",
+    fileType = ""
+  ) => {
+    const normalizedType = fileType.toLowerCase();
+    const normalizedName = fileName.toLowerCase();
+
+    if (
+      normalizedType.startsWith("image/") ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
+        normalizedName
+      )
+    ) {
+      return "bi-file-earmark-image";
+    }
+
+    if (
+      normalizedType === "application/pdf" ||
+      /\.pdf$/i.test(normalizedName)
+    ) {
+      return "bi-file-earmark-pdf";
+    }
+
+    if (
+      normalizedType.includes("word") ||
+      normalizedType.includes("document") ||
+      /\.(doc|docx)$/i.test(normalizedName)
+    ) {
+      return "bi-file-earmark-word";
+    }
+
+    if (
+      normalizedType.includes("excel") ||
+      normalizedType.includes("spreadsheet") ||
+      /\.(xls|xlsx)$/i.test(normalizedName)
+    ) {
+      return "bi-file-earmark-excel";
+    }
+
+    if (
+      normalizedType.includes("powerpoint") ||
+      /\.(ppt|pptx)$/i.test(normalizedName)
+    ) {
+      return "bi-file-earmark-ppt";
+    }
+
+    if (
+      normalizedType.includes("zip") ||
+      /\.(zip|rar|7z)$/i.test(normalizedName)
+    ) {
+      return "bi-file-earmark-zip";
+    }
+
+    return "bi-file-earmark";
+  };
+
+  const isUploadedImage = (file) => {
+    if (!file) return false;
+
+    return (
+      file.tipo_file?.startsWith("image/") ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
+        file.nome_file || ""
+      )
+    );
+  };
+
+  const clearPendingFiles = () => {
+    const urls = Object.values(
+      pendingPreviewUrlsRef.current || {}
+    );
+
+    urls.forEach((url) => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
     });
 
-    if (progetto) {
-      setSelectedProjectLabel(progetto.nome);
-    }
-    setSelectedProfili([]);
+    pendingPreviewUrlsRef.current = {};
+    setPendingPreviewUrls({});
     setPendingFiles([]);
-    setIsModalOpen(true);
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  /*
+   * ============================================================
+   * UTENTE CORRENTE
+   * ============================================================
+   */
+
+  const fetchCurrentUserProfile = async () => {
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        console.error(
+          "Errore recupero utente autenticato:",
+          authError
+        );
+        return;
+      }
+
+      if (!user) {
+        setCurrentProfileId(null);
+        setCurrentUserRole("");
+        return;
+      }
+
+      setCurrentProfileId(user.id);
+
+      const {
+        data: profiloData,
+        error: profiloError,
+      } = await supabase
+        .from("profili")
+        .select("id, ruolo")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profiloError) {
+        console.warn(
+          "Profilo non disponibile, uso l'ID Auth:",
+          profiloError
+        );
+
+        setCurrentUserRole(
+          user.user_metadata?.ruolo || ""
+        );
+
+        return;
+      }
+
+      if (profiloData) {
+        setCurrentProfileId(profiloData.id);
+        setCurrentUserRole(profiloData.ruolo || "");
+      } else {
+        setCurrentUserRole(
+          user.user_metadata?.ruolo || ""
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Errore fetchCurrentUserProfile:",
+        error
+      );
+    }
   };
 
-  const handleSaveTask = async (e) => {
-    e.preventDefault();
-    if (!formData.titolo) {
-      alert("Inserisci almeno il titolo del task");
+  /*
+   * ============================================================
+   * CARICAMENTO UTENTI
+   * ============================================================
+   */
+
+  const fetchUtenti = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profili")
+        .select("id, nome, cognome, ruolo")
+        .order("nome", { ascending: true });
+
+      if (error) {
+        console.error(
+          "Errore caricamento utenti:",
+          error
+        );
+
+        setUtenti([]);
+        return;
+      }
+
+      setUtenti(data || []);
+    } catch (error) {
+      console.error(
+        "Errore fetchUtenti:",
+        error
+      );
+
+      setUtenti([]);
+    }
+  };
+
+  /*
+   * ============================================================
+   * CARICAMENTO PROGETTO
+   * ============================================================
+   */
+
+  const fetchProgetto = async () => {
+    if (!progettoId) {
+      setProgetto(null);
+      setNomeProgetto("");
+      setNomeAzienda("");
+      return null;
+    }
+
+    try {
+      const cleanProjectId =
+        String(progettoId).trim();
+
+      console.log(
+        "[ProjectDetails] Caricamento progetto:",
+        cleanProjectId
+      );
+
+      const { data, error } = await supabase
+        .from("progetti")
+        .select(`
+          *,
+          clienti (
+            nome,
+            azienda
+          )
+        `)
+        .eq("id", cleanProjectId)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "Errore caricamento progetto:",
+          error
+        );
+
+        setErrorMessage(
+          `Errore caricamento progetto: ${error.message}`
+        );
+
+        return null;
+      }
+
+      if (!data) {
+        setErrorMessage(
+          "Progetto non trovato."
+        );
+
+        return null;
+      }
+
+      setProgetto(data);
+      setNomeProgetto(data.nome || "");
+
+      setNomeAzienda(
+        data.clienti?.azienda ||
+          data.clienti?.nome ||
+          ""
+      );
+
+      return data;
+    } catch (error) {
+      console.error(
+        "Errore fetchProgetto:",
+        error
+      );
+
+      setErrorMessage(
+        `Errore caricamento progetto: ${
+          error.message ||
+          "errore sconosciuto"
+        }`
+      );
+
+      return null;
+    }
+  };
+
+  /*
+   * ============================================================
+   * CARICAMENTO TASK
+   * ============================================================
+   */
+
+  const fetchTasks = async () => {
+    if (!progettoId) {
+      setTasks([]);
+      setLoading(false);
       return;
     }
 
-    const payload = {
-      titolo: formData.titolo,
-      descrizione: formData.descrizione,
-      scadenza: formData.scadenza || null,
-      priorita: formData.priorita,
-      progetto_id: progettoId || null,
-      stato: formData.stato,
-    };
+    setLoading(true);
 
-    let targetTaskId = null;
+    try {
+      const cleanProjectId =
+        String(progettoId).trim();
 
-    if (selectedTask) {
-      const { error } = await supabase.from("task").update(payload).eq("id", selectedTask.id);
-      if (error) {
-        alert(`Errore nella modifica: ${error.message}`);
+      console.log(
+        "[ProjectDetails] Caricamento task:",
+        cleanProjectId
+      );
+
+      const {
+        data: taskData,
+        error: taskError,
+      } = await supabase
+        .from("task")
+        .select("*")
+        .eq("progetto_id", cleanProjectId)
+        .order("scadenza", {
+          ascending: true,
+        });
+
+      if (taskError) {
+        console.error(
+          "ERRORE CARICAMENTO TASK:",
+          taskError
+        );
+
+        setTasks([]);
+
+        setErrorMessage(
+          `Errore caricamento task: ${taskError.message}`
+        );
+
         return;
       }
-      targetTaskId = selectedTask.id;
-      await supabase.from("task_profili").delete().eq("task_id", targetTaskId);
-    } else {
-      if (currentProfileId) payload.creato_da = currentProfileId;
-      const { data: newTask, error } = await supabase.from("task").insert([payload]).select().single();
-      if (error) {
-        alert(`Errore nella creazione: ${error.message}`);
+
+      const rawTasks = taskData || [];
+
+      console.log(
+        "[ProjectDetails] Task caricati:",
+        rawTasks.length
+      );
+
+      if (rawTasks.length === 0) {
+        setTasks([]);
+        setErrorMessage("");
         return;
       }
-      targetTaskId = newTask.id;
-    }
 
-    if (selectedProfili.length > 0) {
-      const assegnazioni = selectedProfili.map((profiloId) => ({
-        task_id: targetTaskId,
-        profilo_id: profiloId,
-      }));
-      await supabase.from("task_profili").insert(assegnazioni);
+      /*
+       * --------------------------------------------------------
+       * CREATORI
+       * --------------------------------------------------------
+       */
 
-      const notificheDaCreare = selectedProfili.map((profiloId) => ({
-        user_id: profiloId,
-        titolo: selectedTask ? "Task aggiornato" : "Nuovo task assegnato",
-        messaggio: `Ti è stato assegnato il task "${formData.titolo}".`,
-        letta: false,
-      }));
-      await supabase.from("notifiche").insert(notificheDaCreare);
-    }
+      const creatorIds = [
+        ...new Set(
+          rawTasks
+            .map((task) => task.creato_da)
+            .filter(Boolean)
+        ),
+      ];
 
-    if (pendingFiles.length > 0) {
-      for (const file of pendingFiles) {
-        try {
-          const fileExt = file.name.split(".").pop();
-          const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-          const filePath = `${targetTaskId}/${fileName}`;
+      let creators = [];
 
-          const { error: uploadError } = await supabase.storage
-            .from("task-attachments")
-            .upload(filePath, file);
+      if (creatorIds.length > 0) {
+        const {
+          data: creatorData,
+          error: creatorError,
+        } = await supabase
+          .from("profili")
+          .select("id, nome, cognome, ruolo")
+          .in("id", creatorIds);
 
-          if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage
-              .from("task-attachments")
-              .getPublicUrl(filePath);
-
-            await supabase.from("task_allegati").insert([
-              {
-                task_id: targetTaskId,
-                nome_file: file.name,
-                url_file: publicUrlData.publicUrl,
-                tipo_file: file.type,
-              },
-            ]);
-          }
-        } catch (err) {
-          console.error("Errore caricamento file in sospeso:", err);
+        if (creatorError) {
+          console.warn(
+            "Impossibile caricare i creatori:",
+            creatorError
+          );
+        } else {
+          creators = creatorData || [];
         }
       }
-    }
 
-    setIsModalOpen(false);
-    fetchDettaglioProgetto();
-  };
-
-  const handleStatusChange = async (task, newStatus) => {
-    const isAssigned = task.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
-    if (!isAssigned && !isAdmin) {
-      alert("Non puoi modificare questo task.");
-      return;
-    }
-
-    const updatedTasks = tasks.map((t) => (t.id === task.id ? { ...t, stato: newStatus } : t));
-    setTasks(updatedTasks);
-    await supabase.from("task").update({ stato: newStatus }).eq("id", task.id);
-  };
-
-  const handleAssignSingleTask = async (taskId, taskTitolo, targetUserId) => {
-    if (!targetUserId) {
-      alert("Nessun utente valido selezionato per la riassegnazione.");
-      return;
-    }
-
-    const { error } = await supabase.from("task_profili").insert([
-      {
-        task_id: taskId,
-        profilo_id: targetUserId,
-      },
-    ]);
-
-    if (error) {
-      alert(`Errore durante l'assegnazione: ${error.message}`);
-      return;
-    }
-
-    await supabase.from("notifiche").insert([
-      {
-        user_id: targetUserId,
-        titolo: "Task assegnato (Bilanciamento mirato)",
-        messaggio: `Ti è stato assegnato il task "${taskTitolo}".`,
-        letta: false
-      }
-    ]);
-
-    alert("Task assegnato con successo!");
-    fetchDettaglioProgetto();
-  };
-
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-
-  const ruoliDisponibili = ["Tutti", ...new Set(utenti.map((u) => u.ruolo).filter(Boolean))];
-
-  const getFilteredTasksForModal = () => {
-    const filteredUsers = utenti.filter((u) => {
-      if (balanceRole === "Tutti") return true;
-      return (u.ruolo || "").trim().toLowerCase() === balanceRole.trim().toLowerCase();
-    });
-
-    const workloadMap = {};
-    filteredUsers.forEach((u) => {
-      workloadMap[u.id] = 0;
-    });
-
-    tasks.forEach((t) => {
-      const isDone = t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato";
-      if (!isDone && t.task_profili) {
-        t.task_profili.forEach((tp) => {
-          if (tp.profili?.id && workloadMap[tp.profili.id] !== undefined) {
-            workloadMap[tp.profili.id] += 1;
-          }
-        });
-      }
-    });
-
-    const matchingTasks = tasks.filter((t) => {
-      const isDone = t.stato?.toLowerCase() === "done" || t.stato?.toLowerCase() === "completato";
-      if (isDone) return false;
-
-      if (balanceScope === "scaduti") {
-        if (!t.scadenza) return false;
-        const d = new Date(t.scadenza);
-        d.setHours(0, 0, 0, 0);
-        return d < now;
-      } else if (balanceScope === "in_scadenza") {
-        if (!t.scadenza) return false;
-        const d = new Date(t.scadenza);
-        d.setHours(0, 0, 0, 0);
-        return d >= now && d <= threeDaysFromNow;
-      } else {
-        return true;
-      }
-    });
-
-    return matchingTasks.map((t) => {
-      const sortedAvailable = [...filteredUsers].sort(
-        (a, b) => (workloadMap[a.id] || 0) - (workloadMap[b.id] || 0)
+      const creatorMap = new Map(
+        creators.map((profile) => [
+          String(profile.id),
+          profile,
+        ])
       );
-      const bestCandidate = sortedAvailable.length > 0 ? sortedAvailable[0] : null;
-      return { task: t, candidate: bestCandidate };
-    });
+
+      /*
+       * --------------------------------------------------------
+       * ASSEGNAZIONI TASK
+       * --------------------------------------------------------
+       */
+
+      const taskIds = rawTasks
+        .map((task) => task.id)
+        .filter(Boolean);
+
+      let assignmentRows = [];
+
+      if (taskIds.length > 0) {
+        const {
+          data: assignmentData,
+          error: assignmentError,
+        } = await supabase
+          .from("task_profili")
+          .select("task_id, profilo_id")
+          .in("task_id", taskIds);
+
+        if (assignmentError) {
+          console.warn(
+            "Impossibile caricare le assegnazioni:",
+            assignmentError
+          );
+        } else {
+          assignmentRows = assignmentData || [];
+        }
+      }
+
+      /*
+       * --------------------------------------------------------
+       * PROFILI ASSEGNATI
+       * --------------------------------------------------------
+       */
+
+      const assignedProfileIds = [
+        ...new Set(
+          assignmentRows
+            .map((row) => row.profilo_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      let assignedProfiles = [];
+
+      if (assignedProfileIds.length > 0) {
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
+          .from("profili")
+          .select("id, nome, cognome, ruolo")
+          .in("id", assignedProfileIds);
+
+        if (profileError) {
+          console.warn(
+            "Impossibile caricare i profili assegnati:",
+            profileError
+          );
+        } else {
+          assignedProfiles = profileData || [];
+        }
+      }
+
+      const profileMap = new Map(
+        assignedProfiles.map((profile) => [
+          String(profile.id),
+          profile,
+        ])
+      );
+
+      /*
+       * --------------------------------------------------------
+       * RICOSTRUZIONE STRUTTURA
+       * --------------------------------------------------------
+       */
+
+      const assignmentsMap = new Map();
+
+      assignmentRows.forEach((row) => {
+        const taskKey = String(row.task_id);
+
+        if (!assignmentsMap.has(taskKey)) {
+          assignmentsMap.set(taskKey, []);
+        }
+
+        const profile = profileMap.get(
+          String(row.profilo_id)
+        );
+
+        if (profile) {
+          assignmentsMap.get(taskKey).push({
+            profili: profile,
+          });
+        }
+      });
+
+      const enrichedTasks = rawTasks.map(
+        (task) => ({
+          ...task,
+
+          progetti: {
+            id: progettoId,
+            nome:
+              nomeProgetto ||
+              progetto?.nome ||
+              "",
+          },
+
+          creatore:
+            creatorMap.get(
+              String(task.creato_da)
+            ) || null,
+
+          task_profili:
+            assignmentsMap.get(
+              String(task.id)
+            ) || [],
+        })
+      );
+
+      console.log(
+        "[ProjectDetails] Task finali:",
+        enrichedTasks
+      );
+
+      setTasks(enrichedTasks);
+      setErrorMessage("");
+    } catch (error) {
+      console.error(
+        "Errore generale fetchTasks:",
+        error
+      );
+
+      setTasks([]);
+
+      setErrorMessage(
+        `Errore caricamento task: ${
+          error.message ||
+          "errore sconosciuto"
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const modalTaskList = getFilteredTasksForModal();
+  /*
+   * ============================================================
+   * INIT
+   * ============================================================
+   */
+
+  useEffect(() => {
+    let active = true;
+
+    const init = async () => {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        await fetchCurrentUserProfile();
+
+        const project =
+          await fetchProgetto();
+
+        if (!active) return;
+
+        if (project) {
+          await fetchTasks();
+        } else {
+          setTasks([]);
+        }
+
+        await fetchUtenti();
+      } catch (error) {
+        console.error(
+          "Errore inizializzazione ProjectDetails:",
+          error
+        );
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    init();
+
+    return () => {
+      active = false;
+    };
+  }, [progettoId]);
+
+  /*
+   * Cleanup finale degli ObjectURL
+   */
+  useEffect(() => {
+    return () => {
+      Object.values(
+        pendingPreviewUrlsRef.current || {}
+      ).forEach((url) => {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+      });
+
+      pendingPreviewUrlsRef.current = {};
+    };
+  }, []);
+
+  /*
+   * ============================================================
+   * REFRESH
+   * ============================================================
+   */
+
+  const refreshPage = async () => {
+    setErrorMessage("");
+    await fetchProgetto();
+    await fetchTasks();
+    await fetchUtenti();
+  };
+
+  /*
+   * ============================================================
+   * NOTE / ALLEGATI
+   * ============================================================
+   */
+
+  const fetchTaskDetailsExtra = async (
+    taskId
+  ) => {
+    if (!taskId) return;
+
+    try {
+      const {
+        data: notesData,
+        error: notesError,
+      } = await supabase
+        .from("task_note")
+        .select(`
+          *,
+          profili (
+            id,
+            nome,
+            cognome
+          )
+        `)
+        .eq("task_id", taskId)
+        .order("created_at", {
+          ascending: true,
+        });
+
+      if (notesError) {
+        console.error(
+          "Errore caricamento note:",
+          notesError
+        );
+      }
+
+      setNoteList(notesData || []);
+
+      const {
+        data: filesData,
+        error: filesError,
+      } = await supabase
+        .from("task_allegati")
+        .select("*")
+        .eq("task_id", taskId)
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (filesError) {
+        console.error(
+          "Errore caricamento allegati:",
+          filesError
+        );
+      }
+
+      setAllegatiList(filesData || []);
+    } catch (error) {
+      console.error(
+        "Errore fetchTaskDetailsExtra:",
+        error
+      );
+    }
+  };
+
+  /*
+   * ============================================================
+   * PRIORITÀ
+   * ============================================================
+   */
+
+  const getPriorityBadge = (task) => {
+    const val = (task.priorita || "")
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    switch (val) {
+      case "alta":
+        return (
+          <span className="task-priority-badge high">
+            <i className="bi bi-arrow-up-circle-fill"></i>
+            Alta
+          </span>
+        );
+
+      case "media":
+        return (
+          <span className="task-priority-badge medium">
+            <i className="bi bi-dash-circle-fill"></i>
+            Media
+          </span>
+        );
+
+      case "bassa":
+        return (
+          <span className="task-priority-badge low">
+            <i className="bi bi-arrow-down-circle-fill"></i>
+            Bassa
+          </span>
+        );
+
+      default:
+        return (
+          <span className="task-priority-badge empty">
+            -
+          </span>
+        );
+    }
+  };
+
+  /*
+   * ============================================================
+   * STATUS
+   * ============================================================
+   */
 
   const getStatusBadgeStyle = (stato) => {
-    switch (stato?.toLowerCase()) {
+    switch (normalizeStatus(stato)) {
       case "done":
       case "completato":
+      case "completed":
         return "bg-success text-white";
+
       case "in_progress":
       case "in_corso":
+      case "in progress":
         return "bg-warning text-dark";
+
       default:
         return "bg-secondary text-white";
     }
   };
 
-  const getPriorityBadge = (task) => {
-    const val = (task.priorita || "").toString().trim().toLowerCase();
-    switch (val) {
-      case "alta":
-        return <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-1"><i className="bi bi-arrow-up-circle-fill me-1"></i>Alta</span>;
-      case "media":
-        return <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-2 py-1"><i className="bi bi-dash-circle-fill me-1"></i>Media</span>;
-      case "bassa":
-        return <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill px-2 py-1"><i className="bi bi-arrow-down-circle-fill me-1"></i>Bassa</span>;
-      default:
-        return <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1">-</span>;
+  /*
+   * ============================================================
+   * APERTURA MODALE MODIFICA
+   * ============================================================
+   */
+
+  const handleRowClick = async (task) => {
+    const isAssigned =
+      task.task_profili?.some(
+        (tp) =>
+          String(tp.profili?.id) ===
+          String(currentProfileId)
+      );
+
+    if (!isAssigned && !isAdmin) {
+      alert(
+        "Non hai i permessi per modificare questo task."
+      );
+      return;
+    }
+
+    clearPendingFiles();
+
+    setSelectedTask(task);
+
+    setFormData({
+      titolo: task.titolo || "",
+      descrizione: task.descrizione || "",
+      scadenza: formatDateInput(
+        task.scadenza
+      ),
+      priorita:
+        task.priorita || "Media",
+      progetto_id: progettoId || "",
+      stato: task.stato || "todo",
+    });
+
+    setSelectedProfili(
+      task.task_profili
+        ? task.task_profili
+            .map(
+              (tp) =>
+                tp.profili?.id
+            )
+            .filter(Boolean)
+        : []
+    );
+
+    setNoteList([]);
+    setAllegatiList([]);
+    setNuovaNota("");
+
+    setIsModalOpen(true);
+
+    await fetchTaskDetailsExtra(
+      task.id
+    );
+  };
+
+  /*
+   * ============================================================
+   * CREAZIONE TASK
+   * ============================================================
+   */
+
+  const handleOpenCreateModal = () => {
+    clearPendingFiles();
+
+    setSelectedTask(null);
+
+    setFormData({
+      titolo: "",
+      descrizione: "",
+      scadenza: "",
+      priorita: "Media",
+      progetto_id:
+        progettoId || "",
+      stato: "todo",
+    });
+
+    setSelectedProfili([]);
+    setNoteList([]);
+    setAllegatiList([]);
+    setNuovaNota("");
+
+    setIsModalOpen(true);
+  };
+
+  /*
+   * ============================================================
+   * INPUT FORM
+   * ============================================================
+   */
+
+  const handleInputChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  /*
+   * ============================================================
+   * ASSEGNAZIONI
+   * ============================================================
+   */
+
+  const toggleProfilo = (
+    profiloId
+  ) => {
+    setSelectedProfili((prev) =>
+      prev.includes(profiloId)
+        ? prev.filter(
+            (id) =>
+              id !== profiloId
+          )
+        : [
+            ...prev,
+            profiloId,
+          ]
+    );
+  };
+
+  /*
+   * ============================================================
+   * FILE PENDENTI
+   * ============================================================
+   */
+
+  const handlePendingFileSelect = (
+    event
+  ) => {
+    const files = Array.from(
+      event.target.files || []
+    );
+
+    if (files.length > 0) {
+      setPendingFiles((prev) => [
+        ...prev,
+        ...files,
+      ]);
+
+      files.forEach((file) => {
+        if (!isImageFile(file)) {
+          return;
+        }
+
+        const previewKey =
+          getPendingFileKey(file);
+
+        const previewUrl =
+          URL.createObjectURL(
+            file
+          );
+
+        /*
+         * Se per qualche motivo esiste già
+         * un preview con la stessa chiave,
+         * revociamo quello precedente.
+         */
+        const previousUrl =
+          pendingPreviewUrlsRef
+            .current?.[
+            previewKey
+          ];
+
+        if (previousUrl) {
+          URL.revokeObjectURL(
+            previousUrl
+          );
+        }
+
+        pendingPreviewUrlsRef.current =
+          {
+            ...pendingPreviewUrlsRef.current,
+            [previewKey]:
+              previewUrl,
+          };
+
+        setPendingPreviewUrls(
+          (prev) => ({
+            ...prev,
+            [previewKey]:
+              previewUrl,
+          })
+        );
+      });
+    }
+
+    /*
+     * Permette di riselezionare lo stesso file.
+     */
+    event.target.value = null;
+  };
+
+  const removePendingFile = (
+    indexToRemove
+  ) => {
+    const fileToRemove =
+      pendingFiles[
+        indexToRemove
+      ];
+
+    if (fileToRemove) {
+      const previewKey =
+        getPendingFileKey(
+          fileToRemove
+        );
+
+      const previewUrl =
+        pendingPreviewUrlsRef
+          .current?.[
+          previewKey
+        ];
+
+      if (previewUrl) {
+        URL.revokeObjectURL(
+          previewUrl
+        );
+      }
+
+      const updatedUrls = {
+        ...pendingPreviewUrlsRef.current,
+      };
+
+      delete updatedUrls[
+        previewKey
+      ];
+
+      pendingPreviewUrlsRef.current =
+        updatedUrls;
+
+      setPendingPreviewUrls(
+        updatedUrls
+      );
+    }
+
+    setPendingFiles((prev) =>
+      prev.filter(
+        (_, index) =>
+          index !==
+          indexToRemove
+      )
+    );
+  };
+
+  /*
+   * ============================================================
+   * SALVATAGGIO TASK
+   * ============================================================
+   */
+
+  const handleSaveTask = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (!formData.titolo.trim()) {
+      alert(
+        "Inserisci almeno il titolo del task."
+      );
+      return;
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const creatorId =
+        currentProfileId ||
+        user?.id ||
+        null;
+
+      const payload = {
+        titolo:
+          formData.titolo.trim(),
+
+        descrizione:
+          formData.descrizione.trim() ||
+          null,
+
+        scadenza:
+          formData.scadenza ||
+          null,
+
+        priorita:
+          formData.priorita ||
+          "Media",
+
+        progetto_id:
+          progettoId || null,
+
+        stato:
+          formData.stato ||
+          "todo",
+      };
+
+      let targetTaskId = null;
+
+      /*
+       * --------------------------------------------------------
+       * MODIFICA
+       * --------------------------------------------------------
+       */
+
+      if (selectedTask) {
+        const {
+          error: updateError,
+        } = await supabase
+          .from("task")
+          .update(payload)
+          .eq(
+            "id",
+            selectedTask.id
+          );
+
+        if (updateError) {
+          alert(
+            `Errore aggiornamento task: ${updateError.message}`
+          );
+          return;
+        }
+
+        targetTaskId =
+          selectedTask.id;
+
+        const {
+          error:
+            deleteAssignmentError,
+        } = await supabase
+          .from("task_profili")
+          .delete()
+          .eq(
+            "task_id",
+            targetTaskId
+          );
+
+        if (
+          deleteAssignmentError
+        ) {
+          console.warn(
+            "Errore eliminazione vecchie assegnazioni:",
+            deleteAssignmentError
+          );
+        }
+      }
+
+      /*
+       * --------------------------------------------------------
+       * CREAZIONE
+       * --------------------------------------------------------
+       */
+
+      else {
+        if (creatorId) {
+          payload.creato_da =
+            creatorId;
+        }
+
+        const {
+          data: newTask,
+          error: insertError,
+        } = await supabase
+          .from("task")
+          .insert([payload])
+          .select("*")
+          .single();
+
+        if (insertError) {
+          alert(
+            `Errore creazione task: ${insertError.message}`
+          );
+          return;
+        }
+
+        targetTaskId =
+          newTask.id;
+      }
+
+      /*
+       * --------------------------------------------------------
+       * NUOVE ASSEGNAZIONI
+       * --------------------------------------------------------
+       */
+
+      if (
+        targetTaskId &&
+        selectedProfili.length >
+          0
+      ) {
+        const assegnazioni =
+          selectedProfili.map(
+            (profiloId) => ({
+              task_id:
+                targetTaskId,
+              profilo_id:
+                profiloId,
+            })
+          );
+
+        const {
+          error:
+            assignmentError,
+        } = await supabase
+          .from("task_profili")
+          .insert(
+            assegnazioni
+          );
+
+        if (assignmentError) {
+          console.error(
+            "Errore assegnazione task:",
+            assignmentError
+          );
+        }
+
+        /*
+         * ------------------------------------------------------
+         * NOTIFICHE
+         * ------------------------------------------------------
+         */
+
+        const notifiche =
+          selectedProfili.map(
+            (profiloId) => ({
+              user_id:
+                profiloId,
+
+              titolo:
+                selectedTask
+                  ? "Task aggiornato"
+                  : "Nuovo task assegnato",
+
+              messaggio:
+                `Ti è stato assegnato il task "${formData.titolo.trim()}".`,
+
+              letta: false,
+            })
+          );
+
+        const {
+          error:
+            notificationError,
+        } = await supabase
+          .from("notifiche")
+          .insert(
+            notifiche
+          );
+
+        if (notificationError) {
+          console.warn(
+            "Errore notifiche:",
+            notificationError
+          );
+        }
+      }
+
+      /*
+       * --------------------------------------------------------
+       * UPLOAD FILE NUOVI
+       * --------------------------------------------------------
+       */
+
+      if (
+        targetTaskId &&
+        pendingFiles.length > 0
+      ) {
+        for (const file of pendingFiles) {
+          try {
+            const fileExt =
+              file.name.includes(".")
+                ? file.name
+                    .split(".")
+                    .pop()
+                : "";
+
+            const randomPart =
+              Math.random()
+                .toString(36)
+                .substring(2);
+
+            const fileName =
+              `${randomPart}_${Date.now()}${
+                fileExt
+                  ? `.${fileExt}`
+                  : ""
+              }`;
+
+            const filePath =
+              `${targetTaskId}/${fileName}`;
+
+            const {
+              error: uploadError,
+            } = await supabase.storage
+              .from(
+                "task-attachments"
+              )
+              .upload(
+                filePath,
+                file
+              );
+
+            if (uploadError) {
+              console.error(
+                "Errore upload:",
+                uploadError
+              );
+              continue;
+            }
+
+            const {
+              data:
+                publicUrlData,
+            } =
+              supabase.storage
+                .from(
+                  "task-attachments"
+                )
+                .getPublicUrl(
+                  filePath
+                );
+
+            if (
+              publicUrlData?.publicUrl
+            ) {
+              const {
+                error:
+                  attachmentError,
+              } = await supabase
+                .from(
+                  "task_allegati"
+                )
+                .insert([
+                  {
+                    task_id:
+                      targetTaskId,
+
+                    nome_file:
+                      file.name,
+
+                    url_file:
+                      publicUrlData.publicUrl,
+
+                    tipo_file:
+                      file.type,
+                  },
+                ]);
+
+              if (
+                attachmentError
+              ) {
+                console.error(
+                  "Errore salvataggio allegato:",
+                  attachmentError
+                );
+              }
+            }
+          } catch (error) {
+            console.error(
+              "Errore caricamento file:",
+              error
+            );
+          }
+        }
+      }
+
+      /*
+       * --------------------------------------------------------
+       * CHIUSURA
+       * --------------------------------------------------------
+       */
+
+      clearPendingFiles();
+
+      setIsModalOpen(false);
+      setSelectedTask(null);
+      setNoteList([]);
+      setAllegatiList([]);
+      setNuovaNota("");
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(
+        "Errore handleSaveTask:",
+        error
+      );
+
+      alert(
+        `Errore: ${
+          error.message ||
+          "errore sconosciuto"
+        }`
+      );
     }
   };
 
-  const tasksFiltrati = tasks.filter((t) => {
-    const ricerca = searchTerm ? searchTerm.toLowerCase().trim() : "";
-    const titolo = (t.titolo || "").toLowerCase();
-    const descrizione = (t.descrizione || "").toLowerCase();
-    const assegnati = t.task_profili
-      ? t.task_profili.map((tp) => `${tp.profili?.nome || ""} ${tp.profili?.cognome || ""}`).join(" ").toLowerCase()
-      : "";
+  /*
+   * ============================================================
+   * CAMBIO STATO
+   * ============================================================
+   */
 
-    const matchesSearch = !ricerca || titolo.includes(ricerca) || descrizione.includes(ricerca) || assegnati.includes(ricerca);
-    if (!matchesSearch) return false;
+  const handleStatusChange = async (
+    task,
+    newStatus
+  ) => {
+    const isAssigned =
+      task.task_profili?.some(
+        (tp) =>
+          String(tp.profili?.id) ===
+          String(currentProfileId)
+      );
 
-    if (priorityFilter === "Miei") {
-      return t.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
+    if (!isAssigned && !isAdmin) {
+      alert(
+        "Non puoi modificare questo task."
+      );
+      return;
     }
-    if (priorityFilter === "Tutti") return true;
 
-    return (t.priorita || "").toString().trim().toLowerCase() === priorityFilter.toLowerCase().trim();
-  });
+    const previousTasks = tasks;
 
-  const tasksOrdinati = [...tasksFiltrati].sort((a, b) => {
-    const isDoneA = ["done", "completato"].includes(a.stato?.toLowerCase());
-    const isDoneB = ["done", "completato"].includes(b.stato?.toLowerCase());
-    if (isDoneA !== isDoneB) return isDoneA ? 1 : -1;
-    if (!a.scadenza && !b.scadenza) return 0;
-    if (!a.scadenza) return 1;
-    if (!b.scadenza) return -1;
-    return new Date(a.scadenza) - new Date(b.scadenza);
-  });
-
-  const totalTasks = tasksFiltrati.length;
-  const doneTasks = tasksFiltrati.filter((t) => ["done", "completato"].includes(t.stato?.toLowerCase())).length;
-  const inProgressTasks = tasksFiltrati.filter((t) => ["in_progress", "in_corso"].includes(t.stato?.toLowerCase())).length;
-  
-  const expTasks = tasksFiltrati.filter((t) => {
-    if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
-    const d = new Date(t.scadenza);
-    d.setHours(0, 0, 0, 0);
-    return d >= now && d <= threeDaysFromNow;
-  }).length;
-
-  const overdueTasks = tasksFiltrati.filter((t) => {
-    if (!t.scadenza || ["done", "completato"].includes(t.stato?.toLowerCase())) return false;
-    const d = new Date(t.scadenza);
-    d.setHours(0, 0, 0, 0);
-    return d < now;
-  }).length;
-
-  const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-
-  if (loading) {
-    return (
-      <div className="text-center my-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Caricamento...</span>
-        </div>
-      </div>
+    setTasks((prev) =>
+      prev.map((item) =>
+        item.id === task.id
+          ? {
+              ...item,
+              stato: newStatus,
+            }
+          : item
+      )
     );
-  }
 
-  const statoRealeProgetto = getEffectiveStatus(progetto, tasks);
+    const { error } =
+      await supabase
+        .from("task")
+        .update({
+          stato: newStatus,
+        })
+        .eq("id", task.id);
 
-  return (
-    <div className="container pt-4 mb-5">
-      <div className="card shadow-sm border-0 rounded-4 p-4 bg-white mb-4">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-          <div className="d-flex align-items-center gap-3">
-            <button
-              className="add-new-task d-flex align-items-center justify-content-center p-0 flex-shrink-0"
-              style={{ width: "42px", height: "42px", borderRadius: "50%" }}
-              onClick={() => { if (onBack) onBack("projects"); }}
-              title="Torna alla Lista Progetti"
-            >
-              <i className="bi bi-arrow-left fs-5"></i>
-            </button>
-            <div>
-              <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 rounded-pill mb-1 text-uppercase">
-                {statoRealeProgetto}
-              </span>
-              <h2 className="fw-bold text-dark mb-1">{progetto?.nome}</h2>
-              <p className="text-muted mb-0">
-                <i className="bi bi-building me-1"></i>
-                Cliente: {progetto?.clienti?.azienda || progetto?.clienti?.nome || "Nessun cliente associato"}
-              </p>
-            </div>
-          </div>
+    if (error) {
+      console.error(
+        "Errore aggiornamento stato:",
+        error
+      );
 
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            {isAdmin && (
-              <button className="add-new-task" onClick={() => setIsBalanceModalOpen(true)} title="Gestisci task critici">
-                <b><i className="bi bi-robot me-1"></i>Bilancia Task</b>
-              </button>
-            )}
-            <button className="add-new-task" onClick={handleOpenCreateModal}>
-              <b><i className="bi bi-plus me-1"></i>Crea Task</b>
-            </button>
-            <button className="add-new-task" onClick={fetchDettaglioProgetto}>
-              <b><i className="bi bi-arrow-clockwise me-1"></i>Aggiorna</b>
-            </button>
-          </div>
-        </div>
-      </div>
+      setTasks(
+        previousTasks
+      );
 
-      {/* METRICHE (Con Card Completati Ripristinata) */}
-      <div className="row g-3 mb-4">
-        <div className="col-6 col-md-2">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">Totale</span>
-              <span className="h4 fw-bold mb-0">{totalTasks}</span>
-            </div>
-            <div className="bg-light rounded-circle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-              <i className="bi bi-list-task fs-5"></i>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-2">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">In Corso</span>
-              <span className="h4 fw-bold mb-0 text-warning">{inProgressTasks}</span>
-            </div>
-            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-              <i className="bi bi-hourglass-split fs-5"></i>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-2">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">In Scadenza</span>
-              <span className="h4 fw-bold mb-0 text-warning">{expTasks}</span>
-            </div>
-            <div className="bg-warning-subtle rounded-circle text-warning d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-              <i className="bi bi-clock-history fs-5"></i>
-            </div>
-          </div>
-        </div>
-        <div className="col-6 col-md-2">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">Scaduti</span>
-              <span className="h4 fw-bold mb-0 text-danger">{overdueTasks}</span>
-            </div>
-            <div className="bg-danger-subtle rounded-circle text-danger d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-              <i className="bi bi-exclamation-triangle fs-5"></i>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-4">
-          <div className="p-3 bg-white rounded-4 shadow-sm border-0 d-flex align-items-center justify-content-between">
-            <div className="me-2 overflow-hidden">
-              <span className="text-muted small d-block text-truncate">Completati</span>
-              <span className="h4 fw-bold mb-0 text-success">{doneTasks} <span className="fs-6 text-muted fw-normal">({completionRate}%)</span></span>
-            </div>
-            <div className="bg-success-subtle rounded-circle text-success d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-              <i className="bi bi-check-circle-fill fs-5"></i>
-            </div>
-          </div>
-        </div>
-      </div>
+      alert(
+        `Errore aggiornamento stato: ${error.message}`
+      );
+    }
+  };
 
-      <div className="mb-3">
-        <div className="input-group search-bar-clean align-items-center bg-white rounded-3 px-3 py-1 shadow-sm">
-          <span className="bg-transparent border-0 pe-2"><i className="bi bi-search text-muted"></i></span>
-          <input
-            type="text"
-            className="form-control bg-transparent border-0 ps-0 shadow-none"
-            placeholder="Cerca task in questo progetto..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
+  /*
+   * ============================================================
+   * ELIMINAZIONE
+   * ============================================================
+   */
 
-      <div className="d-flex gap-2 mb-4 overflow-x-auto pb-1">
-        {["Tutti", "Miei", "Alta", "Media", "Bassa"].map((p) => {
-          let label = p;
-          if (p === "Tutti") label = "Tutti i Task";
-          if (p === "Miei") label = "I Miei Task";
-          if (p !== "Tutti" && p !== "Miei") label = `Priorità ${p}`;
+  const handleDeleteTask = async (
+    taskId
+  ) => {
+    if (!isAdmin) {
+      alert(
+        "Solo un amministratore può eliminare un task."
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Sei sicuro di voler eliminare questo task?"
+      );
+
+    if (!confirmed) return;
+
+    try {
+      const { error } =
+        await supabase
+          .from("task")
+          .delete()
+          .eq("id", taskId);
+
+      if (error) {
+        alert(
+          `Errore durante l'eliminazione: ${error.message}`
+        );
+        return;
+      }
+
+      clearPendingFiles();
+
+      setIsModalOpen(false);
+      setSelectedTask(null);
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(
+        "Errore eliminazione:",
+        error
+      );
+    }
+  };
+
+  /*
+   * ============================================================
+   * NOTE
+   * ============================================================
+   */
+
+  const handleAddNota = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (
+      !nuovaNota.trim() ||
+      !selectedTask
+    ) {
+      return;
+    }
+
+    if (!currentProfileId) {
+      alert(
+        "Profilo utente non disponibile."
+      );
+      return;
+    }
+
+    const { error } =
+      await supabase
+        .from("task_note")
+        .insert([
+          {
+            task_id:
+              selectedTask.id,
+
+            profilo_id:
+              currentProfileId,
+
+            testo:
+              nuovaNota.trim(),
+          },
+        ]);
+
+    if (error) {
+      alert(
+        `Errore nell'invio della nota: ${error.message}`
+      );
+      return;
+    }
+
+    setNuovaNota("");
+
+    await fetchTaskDetailsExtra(
+      selectedTask.id
+    );
+  };
+
+  /*
+   * ============================================================
+   * UPLOAD FILE SU TASK ESISTENTE
+   * ============================================================
+   */
+
+  const handleFileUpload = async (
+    event
+  ) => {
+    const file =
+      event.target.files?.[0];
+
+    if (!file || !selectedTask) {
+      return;
+    }
+
+    setUploadingFile(true);
+
+    try {
+      const fileExt =
+        file.name.includes(".")
+          ? file.name
+              .split(".")
+              .pop()
+          : "";
+
+      const fileName =
+        `${Math.random()
+          .toString(36)
+          .substring(2)}_${Date.now()}${
+          fileExt
+            ? `.${fileExt}`
+            : ""
+        }`;
+
+      const filePath =
+        `${selectedTask.id}/${fileName}`;
+
+      const {
+        error: uploadError,
+      } = await supabase.storage
+        .from(
+          "task-attachments"
+        )
+        .upload(
+          filePath,
+          file
+        );
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const {
+        data: publicUrlData,
+      } =
+        supabase.storage
+          .from(
+            "task-attachments"
+          )
+          .getPublicUrl(
+            filePath
+          );
+
+      if (
+        !publicUrlData?.publicUrl
+      ) {
+        throw new Error(
+          "URL pubblico del file non disponibile."
+        );
+      }
+
+      const { error: dbError } =
+        await supabase
+          .from("task_allegati")
+          .insert([
+            {
+              task_id:
+                selectedTask.id,
+
+              nome_file:
+                file.name,
+
+              url_file:
+                publicUrlData.publicUrl,
+
+              tipo_file:
+                file.type,
+            },
+          ]);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      await fetchTaskDetailsExtra(
+        selectedTask.id
+      );
+    } catch (error) {
+      console.error(
+        "Errore upload file:",
+        error
+      );
+
+      alert(
+        `Errore durante il caricamento del file: ${error.message}`
+      );
+    } finally {
+      setUploadingFile(false);
+      event.target.value = null;
+    }
+  };
+
+  /*
+   * ============================================================
+   * BILANCIAMENTO
+   * ============================================================
+   */
+
+  const now = useMemo(() => {
+    const date = new Date();
+
+    date.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    return date;
+  }, []);
+
+  const threeDaysFromNow =
+    useMemo(() => {
+      return new Date(
+        now.getTime() +
+          3 *
+            24 *
+            60 *
+            60 *
+            1000
+      );
+    }, [now]);
+
+  const ruoliDisponibili =
+    useMemo(() => {
+      const roles = utenti
+        .map(
+          (user) =>
+            user.ruolo
+        )
+        .filter(Boolean);
+
+      return [
+        "Tutti",
+        ...new Set(roles),
+      ];
+    }, [utenti]);
+
+  const getFilteredTasksForModal =
+    () => {
+      const filteredUsers =
+        utenti.filter((user) => {
+          if (
+            balanceRole ===
+            "Tutti"
+          ) {
+            return true;
+          }
 
           return (
-            <button
-              key={p}
-              type="button"
-              className={`btn btn-sm rounded-pill px-3 py-1 fw-semibold transition-all ${
-                priorityFilter === p ? "btn-dark shadow-sm" : "btn-light text-muted border-0 bg-white"
-              }`}
-              onClick={() => setPriorityFilter(p)}
-            >
-              {label}
-            </button>
+            (
+              user.ruolo || ""
+            )
+              .trim()
+              .toLowerCase() ===
+            balanceRole
+              .trim()
+              .toLowerCase()
           );
-        })}
+        });
+
+      const workloadMap = {};
+
+      filteredUsers.forEach(
+        (user) => {
+          workloadMap[user.id] =
+            0;
+        }
+      );
+
+      tasks.forEach((task) => {
+        if (isDone(task)) {
+          return;
+        }
+
+        task.task_profili?.forEach(
+          (tp) => {
+            const profileId =
+              tp.profili?.id;
+
+            if (
+              profileId &&
+              workloadMap[
+                profileId
+              ] !== undefined
+            ) {
+              workloadMap[
+                profileId
+              ] += 1;
+            }
+          }
+        );
+      });
+
+      const matchingTasks =
+        tasks.filter((task) => {
+          if (isDone(task)) {
+            return false;
+          }
+
+          if (
+            balanceScope ===
+            "scaduti"
+          ) {
+            if (!task.scadenza) {
+              return false;
+            }
+
+            const date =
+              new Date(
+                task.scadenza
+              );
+
+            date.setHours(
+              0,
+              0,
+              0,
+              0
+            );
+
+            return date < now;
+          }
+
+          if (
+            balanceScope ===
+            "in_scadenza"
+          ) {
+            if (!task.scadenza) {
+              return false;
+            }
+
+            const date =
+              new Date(
+                task.scadenza
+              );
+
+            date.setHours(
+              0,
+              0,
+              0,
+              0
+            );
+
+            return (
+              date >= now &&
+              date <=
+                threeDaysFromNow
+            );
+          }
+
+          return true;
+        });
+
+      return matchingTasks.map(
+        (task) => {
+          const sortedAvailable =
+            [...filteredUsers].sort(
+              (a, b) =>
+                (workloadMap[
+                  a.id
+                ] || 0) -
+                (workloadMap[
+                  b.id
+                ] || 0)
+            );
+
+          const candidate =
+            sortedAvailable.length >
+            0
+              ? sortedAvailable[0]
+              : null;
+
+          return {
+            task,
+            candidate,
+          };
+        }
+      );
+    };
+
+  const modalTaskList =
+    getFilteredTasksForModal();
+
+  const handleAssignSingleTask =
+    async (
+      taskId,
+      taskTitolo,
+      targetUserId
+    ) => {
+      if (!targetUserId) {
+        alert(
+          "Nessun utente valido selezionato."
+        );
+        return;
+      }
+
+      const existingTask =
+        tasks.find(
+          (task) =>
+            String(task.id) ===
+            String(taskId)
+        );
+
+      const alreadyAssigned =
+        existingTask?.task_profili?.some(
+          (tp) =>
+            String(
+              tp.profili?.id
+            ) ===
+            String(
+              targetUserId
+            )
+        );
+
+      if (alreadyAssigned) {
+        alert(
+          "Questo utente è già assegnato al task."
+        );
+        return;
+      }
+
+      const { error } =
+        await supabase
+          .from("task_profili")
+          .insert([
+            {
+              task_id: taskId,
+              profilo_id:
+                targetUserId,
+            },
+          ]);
+
+      if (error) {
+        alert(
+          `Errore durante l'assegnazione: ${error.message}`
+        );
+        return;
+      }
+
+      const {
+        error: notificationError,
+      } = await supabase
+        .from("notifiche")
+        .insert([
+          {
+            user_id:
+              targetUserId,
+
+            titolo:
+              "Task assegnato",
+
+            messaggio:
+              `Ti è stato assegnato il task "${taskTitolo}".`,
+
+            letta: false,
+          },
+        ]);
+
+      if (notificationError) {
+        console.warn(
+          "Errore notifica:",
+          notificationError
+        );
+      }
+
+      alert(
+        "Task assegnato con successo!"
+      );
+
+      await fetchTasks();
+    };
+
+  /*
+   * ============================================================
+   * FILTRI
+   * ============================================================
+   */
+
+  const tasksFiltrati =
+    useMemo(() => {
+      return tasks.filter(
+        (task) => {
+          if (!isAdmin) {
+            const isAssigned =
+              task.task_profili?.some(
+                (tp) =>
+                  String(
+                    tp.profili?.id
+                  ) ===
+                  String(
+                    currentProfileId
+                  )
+              );
+
+            if (!isAssigned) {
+              return false;
+            }
+          }
+
+          const ricerca =
+            searchTerm
+              .toLowerCase()
+              .trim();
+
+          const titolo =
+            (
+              task.titolo || ""
+            ).toLowerCase();
+
+          const descrizione =
+            (
+              task.descrizione ||
+              ""
+            ).toLowerCase();
+
+          const assegnati =
+            task.task_profili
+              ?.map(
+                (tp) =>
+                  `${tp.profili?.nome || ""} ${
+                    tp.profili?.cognome || ""
+                  }`
+              )
+              .join(" ")
+              .toLowerCase() ||
+            "";
+
+          const matchesSearch =
+            !ricerca ||
+            titolo.includes(
+              ricerca
+            ) ||
+            descrizione.includes(
+              ricerca
+            ) ||
+            assegnati.includes(
+              ricerca
+            );
+
+          if (!matchesSearch) {
+            return false;
+          }
+
+          if (
+            priorityFilter ===
+            "Miei"
+          ) {
+            return task.task_profili?.some(
+              (tp) =>
+                String(
+                  tp.profili?.id
+                ) ===
+                String(
+                  currentProfileId
+                )
+            );
+          }
+
+          if (
+            priorityFilter ===
+            "Tutti"
+          ) {
+            return true;
+          }
+
+          return (
+            (
+              task.priorita ||
+              ""
+            )
+              .toString()
+              .trim()
+              .toLowerCase() ===
+            priorityFilter
+              .toLowerCase()
+              .trim()
+          );
+        }
+      );
+    }, [
+      tasks,
+      isAdmin,
+      currentProfileId,
+      searchTerm,
+      priorityFilter,
+    ]);
+
+  /*
+   * ============================================================
+   * ORDINAMENTO
+   * ============================================================
+   */
+
+  const tasksOrdinati =
+    useMemo(() => {
+      return [
+        ...tasksFiltrati,
+      ].sort((a, b) => {
+        const doneA =
+          isDone(a);
+
+        const doneB =
+          isDone(b);
+
+        if (doneA !== doneB) {
+          return doneA ? 1 : -1;
+        }
+
+        if (
+          !a.scadenza &&
+          !b.scadenza
+        ) {
+          return 0;
+        }
+
+        if (!a.scadenza) {
+          return 1;
+        }
+
+        if (!b.scadenza) {
+          return -1;
+        }
+
+        return (
+          new Date(
+            a.scadenza
+          ).getTime() -
+          new Date(
+            b.scadenza
+          ).getTime()
+        );
+      });
+    }, [tasksFiltrati]);
+
+  /*
+   * ============================================================
+   * FILTRI DISPONIBILI
+   * ============================================================
+   */
+
+  const filterOptions = isAdmin
+    ? [
+        "Tutti",
+        "Miei",
+        "Alta",
+        "Media",
+        "Bassa",
+      ]
+    : [
+        "Miei",
+        "Alta",
+        "Media",
+        "Bassa",
+      ];
+
+  /*
+   * ============================================================
+   * METRICHE
+   * ============================================================
+   */
+
+  const totalTasks =
+    tasksFiltrati.length;
+
+  const doneTasks =
+    tasksFiltrati.filter(
+      (task) =>
+        isDone(task)
+    ).length;
+
+  const inProgressTasks =
+    tasksFiltrati.filter(
+      (task) =>
+        isInProgress(task)
+    ).length;
+
+  const expTasks =
+    tasksFiltrati.filter(
+      (task) => {
+        if (
+          !task.scadenza ||
+          isDone(task)
+        ) {
+          return false;
+        }
+
+        const date =
+          new Date(
+            task.scadenza
+          );
+
+        date.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        return (
+          date >= now &&
+          date <=
+            threeDaysFromNow
+        );
+      }
+    ).length;
+
+  const overdueTasks =
+    tasksFiltrati.filter(
+      (task) => {
+        if (
+          !task.scadenza ||
+          isDone(task)
+        ) {
+          return false;
+        }
+
+        const date =
+          new Date(
+            task.scadenza
+          );
+
+        date.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        return date < now;
+      }
+    ).length;
+
+  const completionRate =
+    totalTasks > 0
+      ? Math.round(
+          (doneTasks /
+            totalTasks) *
+            100
+        )
+      : 0;
+
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
+
+  return (
+    <div className="task-page">
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
+      <div className="task-page-header">
+        <div className="task-page-heading">
+          <div className="task-page-title-row">
+            {onBack && (
+              <button
+                type="button"
+                className="task-page-button secondary"
+                onClick={() =>
+                  onBack("projects")
+                }
+                title="Torna ai progetti"
+                style={{
+                  marginRight: "10px",
+                }}
+              >
+                <i className="bi bi-arrow-left"></i>
+                Indietro
+              </button>
+            )}
+
+            <h2>
+              {nomeProgetto ||
+                "Caricamento..."}
+            </h2>
+
+            {nomeAzienda && (
+              <span className="task-company-badge">
+                <i className="bi bi-building"></i>
+                {nomeAzienda}
+              </span>
+            )}
+          </div>
+
+          <p>
+            Gestisci attività, scadenze e
+            assegnazioni del team per questo
+            progetto.
+          </p>
+        </div>
+
+        <div className="task-page-actions">
+          {isAdmin && (
+            <button
+              type="button"
+              className="task-page-button secondary"
+              onClick={() =>
+                setIsBalanceModalOpen(
+                  true
+                )
+              }
+              title="Gestisci task critici"
+            >
+              <i className="bi bi-robot"></i>
+              Bilancia Task
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              className="task-page-button primary"
+              onClick={
+                handleOpenCreateModal
+              }
+            >
+              <i className="bi bi-plus"></i>
+              Crea Task
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="task-page-button secondary"
+            onClick={refreshPage}
+          >
+            <i className="bi bi-arrow-clockwise"></i>
+            Aggiorna
+          </button>
+        </div>
       </div>
 
-      {tasksOrdinati.length === 0 ? (
-        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4 bg-white shadow-sm">
-          Nessun task trovato per questo progetto.
+      {/* ======================================================
+          ERRORE
+      ====================================================== */}
+
+      {errorMessage && (
+        <div
+          className="alert alert-danger d-flex align-items-center"
+          role="alert"
+          style={{
+            marginBottom: "20px",
+          }}
+        >
+          <i
+            className="bi bi-exclamation-triangle-fill"
+            style={{
+              marginRight: "10px",
+            }}
+          ></i>
+
+          <div>
+            {errorMessage}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          METRICHE
+      ====================================================== */}
+
+      <div className="task-metrics-grid">
+        <div className="task-metric-card">
+          <div>
+            <span>Totale</span>
+            <strong>
+              {totalTasks}
+            </strong>
+          </div>
+
+          <div className="task-metric-icon blue">
+            <i className="bi bi-list-task"></i>
+          </div>
+        </div>
+
+        <div className="task-metric-card">
+          <div>
+            <span>In Corso</span>
+            <strong className="warning">
+              {inProgressTasks}
+            </strong>
+          </div>
+
+          <div className="task-metric-icon yellow">
+            <i className="bi bi-hourglass-split"></i>
+          </div>
+        </div>
+
+        <div className="task-metric-card">
+          <div>
+            <span>In Scadenza</span>
+            <strong className="warning">
+              {expTasks}
+            </strong>
+          </div>
+
+          <div className="task-metric-icon yellow">
+            <i className="bi bi-clock-history"></i>
+          </div>
+        </div>
+
+        <div className="task-metric-card">
+          <div>
+            <span>Scaduti</span>
+            <strong className="danger">
+              {overdueTasks}
+            </strong>
+          </div>
+
+          <div className="task-metric-icon red">
+            <i className="bi bi-exclamation-triangle"></i>
+          </div>
+        </div>
+
+        <div className="task-metric-card">
+          <div>
+            <span>Completati</span>
+
+            <strong className="success">
+              {doneTasks}
+
+              <small>
+                ({completionRate}%)
+              </small>
+            </strong>
+          </div>
+
+          <div className="task-metric-icon green">
+            <i className="bi bi-check-circle-fill"></i>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================
+          RICERCA
+      ====================================================== */}
+
+      <div className="task-search">
+        <i className="bi bi-search"></i>
+
+        <input
+          type="text"
+          placeholder="Cerca task..."
+          value={searchTerm}
+          onChange={(event) =>
+            setSearchTerm(
+              event.target.value
+            )
+          }
+        />
+      </div>
+
+      {/* ======================================================
+          FILTRI
+      ====================================================== */}
+
+      <div className="task-filters">
+        {filterOptions.map(
+          (filter) => {
+            let label = filter;
+
+            if (filter === "Tutti") {
+              label = "Tutti i Task";
+            }
+
+            if (filter === "Miei") {
+              label = "I Miei Task";
+            }
+
+            if (
+              filter !== "Tutti" &&
+              filter !== "Miei"
+            ) {
+              label = `Priorità ${filter}`;
+            }
+
+            return (
+              <button
+                key={filter}
+                type="button"
+                className={
+                  priorityFilter ===
+                  filter
+                    ? "task-filter active"
+                    : "task-filter"
+                }
+                onClick={() =>
+                  setPriorityFilter(
+                    filter
+                  )
+                }
+              >
+                {label}
+              </button>
+            );
+          }
+        )}
+      </div>
+
+      {/* ======================================================
+          TABELLA
+      ====================================================== */}
+
+      {loading ? (
+        <div className="task-loading">
+          <div
+            className="spinner-border text-primary"
+            role="status"
+          >
+            <span className="visually-hidden">
+              Caricamento...
+            </span>
+          </div>
+        </div>
+      ) : tasksOrdinati.length === 0 ? (
+        <div className="task-empty">
+          <i className="bi bi-inbox"></i>
+
+          <strong>
+            Nessun task trovato
+          </strong>
+
+          <span>
+            Non ci sono attività che
+            corrispondono ai filtri
+            selezionati.
+          </span>
+
+          {isAdmin && (
+            <button
+              type="button"
+              className="task-page-button primary"
+              onClick={
+                handleOpenCreateModal
+              }
+              style={{
+                marginTop: "15px",
+              }}
+            >
+              <i className="bi bi-plus"></i>
+              Crea il primo task
+            </button>
+          )}
         </div>
       ) : (
-        <div className="table-responsive shadow-sm rounded-4 border-0">
-          <table className="table table-hover align-middle mb-0 bg-white">
-            <thead className="table-light">
+        <div className="task-table-wrapper">
+          <table className="task-table">
+            <thead>
               <tr>
-                <th className="py-3 ps-3">Titolo</th>
-                <th className="py-3">Priorità</th>
-                <th className="py-3">Assegnato da</th>
-                <th className="py-3">Assegnato a</th>
-                <th className="py-3">Scadenza</th>
-                <th className="py-3 pe-3">Stato</th>
+                <th>Titolo</th>
+                <th>Progetto</th>
+                <th>Priorità</th>
+                <th>Assegnato da</th>
+                <th>Assegnato a</th>
+                <th>Scadenza</th>
+                <th>Stato</th>
               </tr>
             </thead>
-            <tbody>
-              {tasksOrdinati.map((t) => {
-                const isAssigned = t.task_profili?.some((tp) => tp.profili?.id === currentProfileId);
-                const canEdit = isAssigned || isAdmin;
 
-                return (
-                  <tr
-                    key={t.id}
-                    onClick={() => handleRowClick(t)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <td className="ps-3 py-3">
-                      <strong className="text-dark">{t.titolo}</strong>
-                      {t.descrizione && (
-                        <div className="text-muted small text-truncate mt-1" style={{ maxWidth: "250px" }}>
-                          {t.descrizione}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3">{getPriorityBadge(t)}</td>
-                    <td className="py-3">
-                      <span className="text-dark small fw-medium">
-                        {t.creatore ? `${t.creatore.nome} ${t.creatore.cognome}` : "-"}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      {t.task_profili && t.task_profili.length > 0 ? (
-                        <div className="d-flex flex-wrap gap-1">
-                          {t.task_profili.map((tp, idx) => {
-                            const isMe = tp.profili?.id === currentProfileId;
-                            return (
-                              <span
-                                key={tp.profili?.id || idx}
-                                className={`badge ${isMe ? 'bg-primary text-white' : 'bg-light text-secondary'} border-0 rounded-pill px-3 py-2`}
-                              >
-                                <i className="bi bi-person me-1"></i>
-                                {tp.profili?.nome || ""} {tp.profili?.cognome || ""} {isMe && "(Tu)"}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-muted small">Nessuno</span>
-                      )}
-                    </td>
-                    <td className="py-3">
-                      {t.scadenza ? new Date(t.scadenza).toLocaleDateString("it-IT") : <span className="text-muted small">-</span>}
-                    </td>
-                    <td className="pe-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        className={`form-select form-select-sm task-status-select ${getStatusBadgeStyle(t.stato)}`}
-                        value={t.stato || "todo"}
-                        onChange={(e) => handleStatusChange(t, e.target.value)}
-                        disabled={!canEdit}
-                        style={{ cursor: canEdit ? "pointer" : "not-allowed", width: "130px" }}
+            <tbody>
+              {tasksOrdinati.map(
+                (task) => {
+                  const isAssigned =
+                    task.task_profili?.some(
+                      (tp) =>
+                        String(
+                          tp.profili?.id
+                        ) ===
+                        String(
+                          currentProfileId
+                        )
+                    );
+
+                  const canEdit =
+                    isAssigned ||
+                    isAdmin;
+
+                  return (
+                    <tr
+                      key={task.id}
+                      onClick={() =>
+                        handleRowClick(
+                          task
+                        )
+                      }
+                      style={{
+                        cursor:
+                          canEdit
+                            ? "pointer"
+                            : "default",
+                      }}
+                    >
+                      {/* TITOLO */}
+
+                      <td>
+                        <strong>
+                          {task.titolo}
+                        </strong>
+
+                        {task.descrizione && (
+                          <span className="task-description-preview">
+                            {
+                              task.descrizione
+                            }
+                          </span>
+                        )}
+                      </td>
+
+                      {/* PROGETTO */}
+
+                      <td>
+                        {nomeProgetto ? (
+                          <span className="task-project">
+                            <i className="bi bi-folder2"></i>
+                            {nomeProgetto}
+                          </span>
+                        ) : (
+                          <span className="task-no-project">
+                            Nessun progetto
+                          </span>
+                        )}
+                      </td>
+
+                      {/* PRIORITÀ */}
+
+                      <td>
+                        {getPriorityBadge(
+                          task
+                        )}
+                      </td>
+
+                      {/* CREATORE */}
+
+                      <td>
+                        <span className="task-creator">
+                          {task.creatore
+                            ? `${task.creatore.nome || ""} ${
+                                task.creatore.cognome || ""
+                              }`.trim()
+                            : "-"}
+                        </span>
+                      </td>
+
+                      {/* ASSEGNATARI */}
+
+                      <td>
+                        {task.task_profili
+                          ?.length >
+                        0 ? (
+                          <div className="task-assignees">
+                            {task.task_profili.map(
+                              (
+                                assignment,
+                                index
+                              ) => {
+                                const profile =
+                                  assignment.profili;
+
+                                const isMe =
+                                  String(
+                                    profile?.id
+                                  ) ===
+                                  String(
+                                    currentProfileId
+                                  );
+
+                                return (
+                                  <span
+                                    key={
+                                      profile?.id ||
+                                      index
+                                    }
+                                    className={
+                                      isMe
+                                        ? "task-assignee me"
+                                        : "task-assignee"
+                                    }
+                                  >
+                                    <i className="bi bi-person"></i>
+
+                                    {profile?.nome ||
+                                      ""}{" "}
+                                    {profile?.cognome ||
+                                      ""}
+
+                                    {isMe &&
+                                      " (Tu)"}
+                                  </span>
+                                );
+                              }
+                            )}
+                          </div>
+                        ) : (
+                          <span className="task-no-assignee">
+                            Nessuno
+                          </span>
+                        )}
+                      </td>
+
+                      {/* SCADENZA */}
+
+                      <td>
+                        {formatDate(
+                          task.scadenza
+                        )}
+                      </td>
+
+                      {/* STATO */}
+
+                      <td
+                        onClick={(event) =>
+                          event.stopPropagation()
+                        }
                       >
-                        <option value="todo" className="bg-white text-dark">To Do</option>
-                        <option value="in_progress" className="bg-white text-dark">In Progress</option>
-                        <option value="done" className="bg-white text-dark">Done</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
+                        <select
+                          className={`task-status-select ${getStatusBadgeStyle(
+                            task.stato
+                          )}`}
+                          value={
+                            task.stato ||
+                            "todo"
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            handleStatusChange(
+                              task,
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          disabled={
+                            !canEdit
+                          }
+                        >
+                          <option
+                            value="todo"
+                            className="bg-white text-dark"
+                          >
+                            To Do
+                          </option>
+
+                          <option
+                            value="in_progress"
+                            className="bg-white text-dark"
+                          >
+                            In Progress
+                          </option>
+
+                          <option
+                            value="done"
+                            className="bg-white text-dark"
+                          >
+                            Done
+                          </option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                }
+              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* MODALE BILANCIAMENTO */}
-      <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)}>
-        <div className="p-3" style={{ maxHeight: "80vh", overflowY: "auto" }}>
-          <h3 className="modal-title mb-3">
-            <i className="bi bi-robot me-2"></i>Gestione e Candidati Task
-          </h3>
+      {/* ======================================================
+          MODALE BILANCIAMENTO
+      ====================================================== */}
 
-          <div className="row g-3 mb-4">
-            <div className="col-md-6">
-              <label className="form-label fw-semibold small">Filtra per Ruolo</label>
+      <Modal
+        isOpen={
+          isBalanceModalOpen
+        }
+        onClose={() =>
+          setIsBalanceModalOpen(
+            false
+          )
+        }
+      >
+        <div className="task-modal">
+          <div className="task-modal-header">
+            <div className="task-modal-heading">
+              <div className="task-modal-icon">
+                <i className="bi bi-robot"></i>
+              </div>
+
+              <div>
+                <h3>
+                  Gestione e Candidati Task
+                </h3>
+
+                <p>
+                  Individua i task critici
+                  e i membri disponibili.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="task-balance-filters">
+            <div>
+              <label>
+                Filtra per Ruolo
+              </label>
+
               <select
-                className="form-select form-select-sm"
-                value={balanceRole}
-                onChange={(e) => setBalanceRole(e.target.value)}
+                value={
+                  balanceRole
+                }
+                onChange={(event) =>
+                  setBalanceRole(
+                    event.target.value
+                  )
+                }
               >
-                {ruoliDisponibili.map((r, index) => (
-                  <option key={index} value={r}>
-                    {r === "Tutti" ? "Tutti i ruoli" : r}
-                  </option>
-                ))}
+                {ruoliDisponibili.map(
+                  (
+                    role,
+                    index
+                  ) => (
+                    <option
+                      key={index}
+                      value={role}
+                    >
+                      {role ===
+                      "Tutti"
+                        ? "Tutti i ruoli"
+                        : role}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label fw-semibold small">Criterio Task</label>
+            <div>
+              <label>
+                Criterio Task
+              </label>
+
               <select
-                className="form-select form-select-sm"
-                value={balanceScope}
-                onChange={(e) => setBalanceScope(e.target.value)}
+                value={
+                  balanceScope
+                }
+                onChange={(event) =>
+                  setBalanceScope(
+                    event.target.value
+                  )
+                }
               >
-                <option value="scaduti">Solo task già scaduti</option>
-                <option value="in_scadenza">Task in scadenza (3 giorni)</option>
-                <option value="tutti">Tutti i task aperti</option>
+                <option value="scaduti">
+                  Solo task già scaduti
+                </option>
+
+                <option value="in_scadenza">
+                  Task in scadenza
+                  (3 giorni)
+                </option>
+
+                <option value="tutti">
+                  Tutti i task aperti
+                </option>
               </select>
             </div>
           </div>
 
-          <h5 className="fw-bold mb-3 fs-6 text-muted uppercase">
-            Task filtrati e membri candidati ({modalTaskList.length})
-          </h5>
+          <div className="task-balance-title">
+            Task filtrati e membri
+            candidati (
+            {
+              modalTaskList.length
+            }
+            )
+          </div>
 
-          {modalTaskList.length === 0 ? (
-            <div className="alert alert-light text-center text-muted border-0 py-4 small">
-              Nessun task risponde ai filtri selezionati.
+          {modalTaskList.length ===
+          0 ? (
+            <div className="task-balance-empty">
+              Nessun task risponde ai
+              filtri selezionati.
             </div>
           ) : (
-            <div className="d-flex flex-column gap-3 mb-4">
-              {modalTaskList.map(({ task, candidate }) => (
-                <div key={task.id} className="p-3 bg-light rounded-3 border-0 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-                  <div className="overflow-hidden">
-                    <div className="fw-bold text-dark text-truncate">{task.titolo}</div>
-                    <div className="small text-muted d-flex align-items-center gap-2 mt-1">
-                      <span><i className="bi bi-calendar-event me-1"></i>Scadenza: {task.scadenza ? new Date(task.scadenza).toLocaleDateString("it-IT") : "-"}</span>
-                    </div>
-                  </div>
+            <div className="task-balance-list">
+              {modalTaskList.map(
+                ({
+                  task,
+                  candidate,
+                }) => (
+                  <div
+                    key={task.id}
+                    className="task-balance-item"
+                  >
+                    <div>
+                      <strong>
+                        {task.titolo}
+                      </strong>
 
-                  <div className="d-flex align-items-center gap-3 flex-shrink-0">
-                    <div className="text-end">
-                      <div className="small text-muted" style={{ fontSize: "0.75rem" }}>Candidato ottimale:</div>
-                      {candidate ? (
-                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-1 small">
-                          <i className="bi bi-person-fill me-1"></i>
-                          {candidate.nome} {candidate.cognome} 
-                          {candidate.ruolo && ` (${candidate.ruolo})`}
-                        </span>
-                      ) : (
-                        <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1 small">Nessuno disponibile</span>
+                      <span>
+                        <i className="bi bi-calendar-event"></i>
+                        Scadenza:{" "}
+                        {formatDate(
+                          task.scadenza
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="task-balance-candidate">
+                      <div>
+                        <small>
+                          Candidato ottimale
+                        </small>
+
+                        {candidate ? (
+                          <span className="task-candidate-badge">
+                            <i className="bi bi-person-fill"></i>
+
+                            {
+                              candidate.nome
+                            }{" "}
+                            {
+                              candidate.cognome
+                            }
+
+                            {candidate.ruolo &&
+                              ` (${candidate.ruolo})`}
+                          </span>
+                        ) : (
+                          <span className="task-no-candidate">
+                            Nessuno disponibile
+                          </span>
+                        )}
+                      </div>
+
+                      {candidate && (
+                        <button
+                          type="button"
+                          className="task-page-button primary"
+                          onClick={() =>
+                            handleAssignSingleTask(
+                              task.id,
+                              task.titolo,
+                              candidate.id
+                            )
+                          }
+                        >
+                          Assegna
+                        </button>
                       )}
                     </div>
-
-                    {candidate && (
-                      <button
-                        type="button"
-                        className="add-new-task"
-                        onClick={() => handleAssignSingleTask(task.id, task.titolo, candidate.id)}
-                        title="Assegna a questo membro"
-                      >
-                        <b>Assegna</b>
-                      </button>
-                    )}
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           )}
 
-          <div className="d-flex justify-content-end">
+          <div className="task-modal-actions">
             <button
               type="button"
-              className="add-new-task"
-              style={{ backgroundColor: "#dc3545", color: "#fff" }}
-              onClick={() => setIsBalanceModalOpen(false)}
+              className="task-page-button danger"
+              onClick={() =>
+                setIsBalanceModalOpen(
+                  false
+                )
+              }
             >
-              <b>Chiudi</b>
+              Chiudi
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* MODALE DETTAGLIO TASK */}
-      <Modal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)}>
-        {detailTask && (
-          <div className="p-3" style={{ maxHeight: "80vh", overflowY: "auto" }}>
-            <div className="d-flex justify-content-between align-items-start mb-3">
-              <h3 className="modal-title mb-0 fw-bold">{detailTask.titolo}</h3>
-              <div>{getPriorityBadge(detailTask)}</div>
-            </div>
+      {/* ======================================================
+          MODALE CREAZIONE / MODIFICA
+      ====================================================== */}
 
-            <div className="row g-3 mb-3">
-              <div className="col-md-4">
-                <span className="text-muted small d-block fw-semibold text-uppercase">Stato</span>
-                <span className={`badge mt-1 ${getStatusBadgeStyle(detailTask.stato)}`}>
-                  {detailTask.stato === "todo" ? "To Do" : detailTask.stato === "in_progress" ? "In Progress" : "Done"}
-                </span>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          clearPendingFiles();
+          setIsModalOpen(false);
+          setSelectedTask(null);
+          setNoteList([]);
+          setAllegatiList([]);
+          setNuovaNota("");
+        }}
+      >
+        <div className="task-modal">
+          <div className="task-modal-header">
+            <div className="task-modal-heading">
+              <div className="task-modal-icon">
+                <i className="bi bi-list-check"></i>
               </div>
-              <div className="col-md-4">
-                <span className="text-muted small d-block fw-semibold text-uppercase">Scadenza</span>
-                <span className="text-dark fw-medium">{detailTask.scadenza ? new Date(detailTask.scadenza).toLocaleDateString("it-IT") : "Nessuna"}</span>
-              </div>
-              <div className="col-md-4">
-                <span className="text-muted small d-block fw-semibold text-uppercase">Progetto</span>
-                <span className="text-dark fw-medium">{detailTask.progetti?.nome || progetto?.nome || "Nessuno"}</span>
-              </div>
-            </div>
 
-            <div className="row g-3 mb-3">
-              <div className="col-md-6">
-                <span className="text-muted small d-block fw-semibold text-uppercase">Assegnato da (Creatore)</span>
-                <span className="text-dark fw-medium">
-                  {detailTask.creatore ? `${detailTask.creatore.nome} ${detailTask.creatore.cognome}` : "Non specificato"}
-                </span>
-              </div>
-              <div className="col-md-6">
-                <span className="text-muted small d-block fw-semibold text-uppercase">Assegnato a</span>
-                <div className="d-flex flex-wrap gap-1 mt-1">
-                  {detailTask.task_profili?.length > 0 ? (
-                    detailTask.task_profili.map((tp, idx) => (
-                      <span key={idx} className="badge bg-light text-secondary border rounded-pill px-2 py-1">
-                        {tp.profili?.nome} {tp.profili?.cognome}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-muted small">Nessun utente assegnato</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <span className="text-muted small d-block mb-1 fw-semibold text-uppercase">Descrizione</span>
-              <div className="p-3 bg-light rounded-3 text-dark" style={{ whiteSpace: "pre-wrap" }}>
-                {detailTask.descrizione || "Nessuna descrizione."}
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <span className="text-muted small d-block mb-2 fw-semibold text-uppercase">Allegati (Doc / Immagini)</span>
-              <div className="d-flex flex-wrap gap-2 mb-2">
-                {allegatiList.map((file) => (
-                  <a
-                    key={file.id}
-                    href={file.url_file}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="badge bg-light text-dark border p-2 text-decoration-none d-flex align-items-center gap-1"
-                  >
-                    <i className="bi bi-paperclip"></i>
-                    <span className="text-truncate" style={{ maxWidth: "150px" }}>{file.nome_file}</span>
-                  </a>
-                ))}
-                {allegatiList.length === 0 && <span className="text-muted small">Nessun file allegato.</span>}
-              </div>
-              
               <div>
-                <label className={`btn btn-sm btn-outline-secondary ${uploadingFile ? "disabled" : ""}`}>
-                  <i className="bi bi-upload me-1"></i> {uploadingFile ? "Caricamento..." : "Aggiungi file o immagine"}
-                  <input type="file" onChange={handleFileUpload} style={{ display: "none" }} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
-                </label>
+                <h3>
+                  {selectedTask
+                    ? "Modifica Task"
+                    : "Nuovo Task"}
+                </h3>
+
+                <p>
+                  {selectedTask
+                    ? "Modifica i dati, le assegnazioni e gli allegati del task."
+                    : "Crea l'attività e assegna i membri responsabili."}
+                </p>
               </div>
             </div>
 
-            <div className="mb-4">
-              <span className="text-muted small d-block mb-2 fw-semibold text-uppercase">Note e Commenti</span>
-              <div className="d-flex flex-column gap-2 mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
-                {noteList.map((nota) => (
-                  <div key={nota.id} className="p-2 bg-light rounded-3 small">
-                    <div className="fw-bold text-primary mb-1">
-                      {nota.profili ? `${nota.profili.nome} ${nota.profili.cognome}` : "Utente"} 
-                      <span className="text-muted fw-normal ms-2" style={{ fontSize: "0.7rem" }}>
-                        {new Date(nota.created_at).toLocaleString("it-IT")}
-                      </span>
-                    </div>
-                    <div>{nota.testo}</div>
-                  </div>
-                ))}
-                {noteList.length === 0 && <span className="text-muted small">Nessuna nota presente.</span>}
-              </div>
-
-              <form onSubmit={handleAddNota} className="input-group input-group-sm">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Scrivi una nota..."
-                  value={nuovaNota}
-                  onChange={(e) => setNuovaNota(e.target.value)}
-                />
-                <button className="btn btn-dark" type="submit">Invia</button>
-              </form>
-            </div>
-
-            <div className="d-flex justify-content-between align-items-center">
-              {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) ? (
-                <button 
-                  type="button" 
-                  className="add-new-task" 
-                  style={{ backgroundColor: "#dc3545", color: "#fff" }} 
-                  onClick={() => handleDeleteTask(detailTask.id)}
-                >
-                  <b><i className="bi bi-trash me-1"></i>Elimina Task</b>
-                </button>
-              ) : <div></div>}
-
-              <div className="d-flex gap-2">
-                <button type="button" className="add-new-task" style={{ backgroundColor: "#6c757d", color: "#fff" }} onClick={() => setIsDetailModalOpen(false)}>
-                  <b>Chiudi</b>
-                </button>
-                {(detailTask.task_profili?.some((tp) => tp.profili?.id === currentProfileId) || isAdmin) && (
-                  <button type="button" className="add-new-task" onClick={() => handleOpenEditFromDetail(detailTask)}>
-                    <b>Modifica Task</b>
-                  </button>
-                )}
-              </div>
-            </div>
+            {selectedTask &&
+              getPriorityBadge(
+                selectedTask
+              )}
           </div>
-        )}
-      </Modal>
 
-      {/* Modale di Creazione/Modifica Task */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-3" style={{ maxHeight: "80vh", overflowY: "auto" }}>
-          <h3 className="modal-title mb-4">
-            {selectedTask ? "Modifica Task" : "Nuovo Task"}
-          </h3>
+          <form
+            onSubmit={
+              handleSaveTask
+            }
+            className="task-create-form"
+          >
+            {/* TITOLO */}
 
-          <form onSubmit={handleSaveTask}>
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Titolo *</label>
+            <div className="task-form-group">
+              <label htmlFor="task-titolo">
+                Titolo{" "}
+                <span>*</span>
+              </label>
+
               <input
+                id="task-titolo"
                 type="text"
                 name="titolo"
-                value={formData.titolo}
-                onChange={handleInputChange}
-                className="form-control"
+                value={
+                  formData.titolo
+                }
+                onChange={
+                  handleInputChange
+                }
+                placeholder="Inserisci il titolo del task"
                 required
               />
             </div>
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Progetto di riferimento</label>
-              <select
-                name="progetto_id"
-                value={progettoId}
+            {/* PROGETTO */}
+
+            <div className="task-form-group">
+              <label>
+                Progetto di riferimento
+              </label>
+
+              <input
+                type="text"
+                value={
+                  nomeProgetto ||
+                  "Progetto corrente"
+                }
                 disabled
-                className="form-select bg-light"
-              >
-                <option value={progettoId}>{progetto?.nome || "Progetto corrente"}</option>
-              </select>
-              <div className="form-text text-muted small">Il task verrà creato automaticamente all'interno di questo progetto.</div>
+              />
+
+              <input
+                type="hidden"
+                name="progetto_id"
+                value={
+                  formData.progetto_id
+                }
+                readOnly
+              />
             </div>
 
-            <div className="row g-3 mb-3">
-              <div className="col-md-6">
-                <label className="form-label fw-semibold">Priorità</label>
+            {/* PRIORITÀ + SCADENZA */}
+
+            <div className="task-form-grid">
+              <div className="task-form-group">
+                <label htmlFor="task-priorita">
+                  Priorità
+                </label>
+
                 <select
+                  id="task-priorita"
                   name="priorita"
-                  value={formData.priorita}
-                  onChange={handleInputChange}
-                  className="form-select"
+                  value={
+                    formData.priorita
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 >
-                  <option value="Bassa">Bassa</option>
-                  <option value="Media">Media</option>
-                  <option value="Alta">Alta</option>
+                  <option value="Bassa">
+                    Bassa
+                  </option>
+
+                  <option value="Media">
+                    Media
+                  </option>
+
+                  <option value="Alta">
+                    Alta
+                  </option>
                 </select>
               </div>
 
-              <div className="col-md-6">
-                <label className="form-label fw-semibold">Scadenza</label>
+              <div className="task-form-group">
+                <label htmlFor="task-scadenza">
+                  Scadenza
+                </label>
+
                 <input
+                  id="task-scadenza"
                   type="date"
                   name="scadenza"
-                  value={formData.scadenza}
-                  onChange={handleInputChange}
-                  className="form-control"
+                  value={
+                    formData.scadenza
+                  }
+                  onChange={
+                    handleInputChange
+                  }
                 />
               </div>
             </div>
 
-            {selectedTask && (
-              <div className="mb-3">
-                <label className="form-label fw-semibold">Stato</label>
-                <select
-                  name="stato"
-                  value={formData.stato}
-                  onChange={handleInputChange}
-                  className="form-select"
-                >
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
-              </div>
-            )}
+            {/* STATO */}
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold d-block">
-                Assegna a membri del team:
+            <div className="task-form-group">
+              <label htmlFor="task-stato">
+                Stato
               </label>
-              <div className="d-flex flex-wrap gap-2 p-3 rounded-3 bg-light border-0">
-                {utenti.length === 0 ? (
-                  <span className="text-muted small">Nessun membro trovato</span>
+
+              <select
+                id="task-stato"
+                name="stato"
+                value={
+                  formData.stato
+                }
+                onChange={
+                  handleInputChange
+                }
+              >
+                <option value="todo">
+                  To Do
+                </option>
+
+                <option value="in_progress">
+                  In Progress
+                </option>
+
+                <option value="done">
+                  Done
+                </option>
+              </select>
+            </div>
+
+            {/* MEMBRI */}
+
+            <div className="task-form-group">
+              <label>
+                Assegna a membri del
+                team
+              </label>
+
+              <div className="task-members-box">
+                {utenti.length ===
+                0 ? (
+                  <span className="task-empty-inline">
+                    Nessun membro trovato
+                  </span>
                 ) : (
-                  utenti.map((member) => {
-                    const isSelected = selectedProfili.includes(member.id);
-                    return (
-                      <button
-                        key={member.id}
-                        type="button"
-                        className={`badge-pill-clean btn btn-sm ${
-                          isSelected ? "btn-dark text-white" : "btn-outline-secondary border-0 bg-white"
-                        }`}
-                        onClick={() => toggleProfilo(member.id)}
-                      >
-                        <i className={`bi bi-${isSelected ? "check-circle-fill text-success" : "plus-circle"} me-1`}></i>
-                        {member.nome} {member.cognome}
-                      </button>
-                    );
-                  })
+                  utenti.map(
+                    (member) => {
+                      const isSelected =
+                        selectedProfili.includes(
+                          member.id
+                        );
+
+                      return (
+                        <button
+                          key={
+                            member.id
+                          }
+                          type="button"
+                          className={
+                            isSelected
+                              ? "task-member selected"
+                              : "task-member"
+                          }
+                          onClick={() =>
+                            toggleProfilo(
+                              member.id
+                            )
+                          }
+                        >
+                          <i
+                            className={
+                              isSelected
+                                ? "bi bi-check-circle-fill"
+                                : "bi bi-plus-circle"
+                            }
+                          ></i>
+
+                          <span>
+                            {
+                              member.nome
+                            }{" "}
+                            {
+                              member.cognome
+                            }
+                          </span>
+                        </button>
+                      );
+                    }
+                  )
                 )}
               </div>
             </div>
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Descrizione</label>
+            {/* DESCRIZIONE */}
+
+            <div className="task-form-group">
+              <label htmlFor="task-descrizione">
+                Descrizione
+              </label>
+
               <textarea
+                id="task-descrizione"
                 name="descrizione"
-                value={formData.descrizione}
-                onChange={handleInputChange}
-                className="form-control"
-                rows="3"
+                value={
+                  formData.descrizione
+                }
+                onChange={
+                  handleInputChange
+                }
+                rows={4}
+                placeholder="Inserisci una descrizione..."
               />
             </div>
 
-            <div className="mb-4">
-              <label className="form-label fw-semibold">Allegati (Doc / Immagini)</label>
-              <div className="d-flex flex-wrap gap-2 mb-2">
-                {pendingFiles.map((file, idx) => (
-                  <span key={idx} className="badge bg-light text-dark border p-2 d-flex align-items-center gap-2">
-                    <i className="bi bi-paperclip"></i>
-                    <span className="text-truncate" style={{ maxWidth: "150px" }}>{file.name}</span>
-                    <button type="button" className="btn-close btn-close-sm" style={{ fontSize: "0.6rem" }} onClick={() => removePendingFile(idx)}></button>
+            {/* ==================================================
+                ALLEGATI NUOVI
+            ================================================== */}
+
+            <div className="task-form-group">
+              <label>
+                Allegati
+              </label>
+
+              <div className="task-attachments-box">
+                {pendingFiles.length >
+                0 ? (
+                  <div className="task-pending-files">
+                    {pendingFiles.map(
+                      (
+                        file,
+                        index
+                      ) => {
+                        const previewKey =
+                          getPendingFileKey(
+                            file
+                          );
+
+                        const previewUrl =
+                          pendingPreviewUrls[
+                            previewKey
+                          ];
+
+                        const image =
+                          isImageFile(
+                            file
+                          );
+
+                        return (
+                          <div
+                            key={
+                              previewKey
+                            }
+                            className="task-pending-file"
+                          >
+                            {image &&
+                            previewUrl ? (
+                              <img
+                                src={
+                                  previewUrl
+                                }
+                                alt={
+                                  file.name
+                                }
+                                className="task-file-thumbnail"
+                              />
+                            ) : (
+                              <div className="task-file-icon">
+                                <i
+                                  className={`bi ${getFileIcon(
+                                    file.name,
+                                    file.type
+                                  )}`}
+                                ></i>
+                              </div>
+                            )}
+
+                            <div className="task-pending-file-info">
+                              <span
+                                title={
+                                  file.name
+                                }
+                              >
+                                {
+                                  file.name
+                                }
+                              </span>
+
+                              <small>
+                                {image
+                                  ? "Immagine"
+                                  : "Documento"}
+                              </small>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="task-file-remove"
+                              onClick={() =>
+                                removePendingFile(
+                                  index
+                                )
+                              }
+                              title="Rimuovi file"
+                              aria-label={`Rimuovi ${file.name}`}
+                            >
+                              <i className="bi bi-x"></i>
+                            </button>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                ) : (
+                  <span className="task-empty-inline">
+                    Nessun file selezionato.
                   </span>
-                ))}
-                {pendingFiles.length === 0 && <span className="text-muted small d-block">Nessun file selezionato per il caricamento.</span>}
-              </div>
-              <div>
-                <label className="btn btn-sm btn-outline-secondary">
-                  <i className="bi bi-upload me-1"></i> Seleziona file o immagini
-                  <input type="file" onChange={handlePendingFileSelect} style={{ display: "none" }} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                )}
+
+                <label className="task-upload-button">
+                  <i className="bi bi-cloud-arrow-up"></i>
+
+                  Seleziona file o
+                  immagini
+
+                  <input
+                    type="file"
+                    onChange={
+                      handlePendingFileSelect
+                    }
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  />
                 </label>
               </div>
             </div>
 
-            <div className="d-flex justify-content-end gap-2">
+            {/* BOTTONI */}
+
+            <div className="task-modal-actions">
               <button
                 type="button"
-                className="add-new-task"
-                style={{ backgroundColor: "#dc3545", color: "#fff" }}
-                onClick={() => setIsModalOpen(false)}
+                className="task-page-button danger"
+                onClick={() => {
+                  clearPendingFiles();
+                  setIsModalOpen(false);
+                  setSelectedTask(
+                    null
+                  );
+                  setNoteList([]);
+                  setAllegatiList([]);
+                  setNuovaNota("");
+                }}
               >
-                <b>Annulla</b>
+                Annulla
               </button>
-              <button type="submit" className="add-new-task">
-                <b>{selectedTask ? "Salva Modifiche" : "Crea Task"}</b>
+
+              <button
+                type="submit"
+                className="task-page-button primary"
+              >
+                <i className="bi bi-check2"></i>
+
+                {selectedTask
+                  ? "Salva Modifiche"
+                  : "Crea Task"}
               </button>
             </div>
           </form>
+
+          {/* ==================================================
+              DETTAGLI SOLO MODIFICA
+          ================================================== */}
+
+          {selectedTask && (
+            <>
+              {/* ALLEGATI */}
+
+              <div className="task-detail-section">
+                <span>
+                  Allegati (Doc /
+                  Immagini)
+                </span>
+
+                <div className="task-files">
+                  {allegatiList.map(
+                    (file) => {
+                      const isImage =
+                        isUploadedImage(
+                          file
+                        );
+
+                      return (
+                        <a
+                          key={
+                            file.id
+                          }
+                          href={
+                            file.url_file
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={
+                            isImage
+                              ? "task-file-link task-file-link-image"
+                              : "task-file-link"
+                          }
+                          title={`Apri ${file.nome_file}`}
+                        >
+                          {isImage ? (
+                            <img
+                              src={
+                                file.url_file
+                              }
+                              alt={
+                                file.nome_file
+                              }
+                              className="task-file-thumbnail uploaded"
+                            />
+                          ) : (
+                            <div className="task-file-icon">
+                              <i
+                                className={`bi ${getFileIcon(
+                                  file.nome_file,
+                                  file.tipo_file ||
+                                    ""
+                                )}`}
+                              ></i>
+                            </div>
+                          )}
+
+                          <div className="task-file-link-info">
+                            <span
+                              title={
+                                file.nome_file
+                              }
+                            >
+                              {
+                                file.nome_file
+                              }
+                            </span>
+
+                            <small>
+                              {isImage
+                                ? "Immagine"
+                                : "Documento"}
+                            </small>
+                          </div>
+
+                          <i className="bi bi-box-arrow-up-right task-file-open-icon"></i>
+                        </a>
+                      );
+                    }
+                  )}
+
+                  {allegatiList.length ===
+                    0 && (
+                    <small>
+                      Nessun file
+                      allegato.
+                    </small>
+                  )}
+                </div>
+
+                <label className="task-upload-button">
+                  <i className="bi bi-upload"></i>
+
+                  {uploadingFile
+                    ? "Caricamento..."
+                    : "Aggiungi file o immagine"}
+
+                  <input
+                    type="file"
+                    onChange={
+                      handleFileUpload
+                    }
+                    disabled={
+                      uploadingFile
+                    }
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                  />
+                </label>
+              </div>
+
+              {/* NOTE */}
+
+              <div className="task-detail-section">
+                <span>
+                  Note e Commenti
+                </span>
+
+                <div className="task-notes-list">
+                  {noteList.map(
+                    (nota) => (
+                      <div
+                        key={
+                          nota.id
+                        }
+                        className="task-note"
+                      >
+                        <div>
+                          <strong>
+                            {nota.profili
+                              ? `${nota.profili.nome || ""} ${
+                                  nota.profili.cognome || ""
+                                }`.trim()
+                              : "Utente"}
+                          </strong>
+
+                          <small>
+                            {nota.created_at
+                              ? new Date(
+                                  nota.created_at
+                                ).toLocaleString(
+                                  "it-IT"
+                                )
+                              : ""}
+                          </small>
+                        </div>
+
+                        <p>
+                          {nota.testo}
+                        </p>
+                      </div>
+                    )
+                  )}
+
+                  {noteList.length ===
+                    0 && (
+                    <small>
+                      Nessuna nota
+                      presente.
+                    </small>
+                  )}
+                </div>
+
+                <form
+                  onSubmit={
+                    handleAddNota
+                  }
+                  className="task-note-form"
+                >
+                  <input
+                    type="text"
+                    placeholder="Scrivi una nota..."
+                    value={
+                      nuovaNota
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNuovaNota(
+                        event.target
+                          .value
+                      )
+                    }
+                  />
+
+                  <button type="submit">
+                    Invia
+                  </button>
+                </form>
+              </div>
+
+              {/* ELIMINA / CHIUDI */}
+
+              <div className="task-modal-actions between">
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    className="task-page-button danger"
+                    onClick={() =>
+                      handleDeleteTask(
+                        selectedTask.id
+                      )
+                    }
+                  >
+                    <i className="bi bi-trash"></i>
+                    Elimina Task
+                  </button>
+                ) : (
+                  <span></span>
+                )}
+
+                <button
+                  type="button"
+                  className="task-page-button secondary"
+                  onClick={() => {
+                    clearPendingFiles();
+                    setIsModalOpen(
+                      false
+                    );
+                    setSelectedTask(
+                      null
+                    );
+                  }}
+                >
+                  Chiudi
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

@@ -1,13 +1,107 @@
-.header {
-  padding: 0 20px;
-  background-color: rgb(40, 40, 255);
-  position: fixed;
-  top: 0;
-  left: 260px; /* Inizia dopo la sidebar */
-  right: 0;
-  height: 60px;
+/* ============================================================
+   HEADER
+============================================================ */
+
+.app-header {
+  width: 100%;
+  height: 70px;
+
   display: flex;
   align-items: center;
-  z-index: 1000;
+  justify-content: space-between;
+
+  padding: 0 24px;
+
+  box-sizing: border-box;
+
+  background: #ffffff;
+
+  border-bottom: 1px solid #e9ebec;
+
+  position: sticky;
+  top: 0;
+
+  z-index: 100;
 }
 
+
+/* ============================================================
+   LEFT
+============================================================ */
+
+.header-left {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+}
+
+.header-title h1 {
+  margin: 0;
+
+  color: #212529;
+
+  font-size: 17px;
+  font-weight: 600;
+
+  line-height: 1;
+}
+
+
+/* ============================================================
+   MENU BUTTON
+============================================================ */
+
+.header-menu-button {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 7px;
+
+  background: transparent;
+
+  color: #495057;
+
+  font-size: 21px;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.header-menu-button:hover {
+  background: #f3f6f9;
+
+  color: #405189;
+}
+
+.header-menu-button:focus {
+  outline: none;
+
+  box-shadow: 0 0 0 3px
+    rgba(64, 81, 137, 0.12);
+}
+
+
+/* ============================================================
+   ACTIONS
+============================================================ */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+}

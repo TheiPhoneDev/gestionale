@@ -1,22 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
 import { supabase } from "../supabaseClient";
+
 import "../App.css";
-import "./taskCard.css";
 import "./TaskPage.css";
-import "bootstrap/dist/css/bootstrap.css";
+
 import "bootstrap-icons/font/bootstrap-icons.min.css";
+
 import Modal from "./Modal";
 
 function ClientsPage() {
   const [clienti, setClienti] = useState([]);
+  const [progetti, setProgetti] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentUserRole, setCurrentUserRole] = useState(""); // Stato per il ruolo utente
+  const [currentUserRole, setCurrentUserRole] = useState("");
 
-  // Stato Modale (Creazione e Modifica)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
@@ -24,38 +27,74 @@ function ClientsPage() {
     azienda: "",
   });
 
-  // Funzione per ricavare il ruolo dell'utente corrente dalla tabella "profili"
+  // Modale conferma eliminazione
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [clienteDaEliminare, setClienteDaEliminare] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const fetchCurrentUserRole = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profiloData } = await supabase
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+
+      if (!user) {
+        setCurrentUserRole("");
+        return;
+      }
+
+      const { data, error } = await supabase
         .from("profili")
         .select("ruolo")
         .eq("id", user.id)
         .single();
 
-      if (profiloData) {
-        setCurrentUserRole(profiloData.ruolo || "");
-      }
+      if (error) throw error;
+
+      setCurrentUserRole(data?.ruolo || "");
+    } catch (error) {
+      console.error("Errore recupero ruolo:", error);
+      setCurrentUserRole("");
     }
   };
 
   const fetchClienti = async () => {
-    setLoading(true);
-    setErrorMessage(null);
+    try {
+      setLoading(true);
+      setErrorMessage("");
 
-    const { data, error } = await supabase
-      .from("clienti")
-      .select("id, nome, azienda, telefono, email")
-      .order("nome", { ascending: true });
+      const { data: clientiData, error: clientiError } = await supabase
+        .from("clienti")
+        .select("id, nome, azienda, telefono, email")
+        .order("nome", { ascending: true });
 
-    if (error) {
-      console.error("Errore Supabase nel recupero dei clienti:", error);
-      setErrorMessage(error.message);
-    } else if (data) {
-      setClienti(data);
+      if (clientiError) throw clientiError;
+
+      const { data: progettiData, error: progettiError } = await supabase
+        .from("progetti")
+        .select("id, nome, cliente_id")
+        .order("nome", { ascending: true });
+
+      if (progettiError) throw progettiError;
+
+      setClienti(clientiData || []);
+      setProgetti(progettiData || []);
+    } catch (error) {
+      console.error("Errore caricamento clienti:", error);
+
+      setErrorMessage(
+        error?.message ||
+          "Si è verificato un errore durante il caricamento.",
+      );
+
+      setClienti([]);
+      setProgetti([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -63,261 +102,570 @@ function ClientsPage() {
     fetchClienti();
   }, []);
 
-  const isAdmin = currentUserRole?.toLowerCase() === "admin"; // Controllo permessi
+  const isAdmin = currentUserRole?.trim().toLowerCase() === "admin";
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  /*
+   * Raggruppa i progetti per cliente.
+   */
+  const progettiPerCliente = useMemo(() => {
+    return progetti.reduce((acc, progetto) => {
+      const clienteId = progetto.cliente_id;
 
-  const handleOpenCreateModal = () => {
+      if (!clienteId) {
+        return acc;
+      }
+
+      if (!acc[clienteId]) {
+        acc[clienteId] = [];
+      }
+
+      acc[clienteId].push(progetto);
+
+      return acc;
+    }, {});
+  }, [progetti]);
+
+  /*
+   * Ricerca clienti anche per nome progetto.
+   */
+  const clientiFiltrati = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) {
+      return clienti;
+    }
+
+    return clienti.filter((cliente) => {
+      const progettiCliente = progettiPerCliente[cliente.id] || [];
+
+      const nomiProgetti = progettiCliente
+        .map((progetto) => progetto.nome || "")
+        .join(" ");
+
+      return (
+        (cliente.nome || "").toLowerCase().includes(term) ||
+        (cliente.azienda || "").toLowerCase().includes(term) ||
+        (cliente.email || "").toLowerCase().includes(term) ||
+        (cliente.telefono || "").toLowerCase().includes(term) ||
+        nomiProgetti.toLowerCase().includes(term)
+      );
+    });
+  }, [clienti, progettiPerCliente, searchTerm]);
+
+  const totaleClienti = clienti.length;
+
+  const clientiConAzienda = clienti.filter((cliente) =>
+    cliente.azienda?.trim(),
+  ).length;
+
+  const clientiConEmail = clienti.filter((cliente) =>
+    cliente.email?.trim(),
+  ).length;
+
+  const openCreateModal = () => {
     setEditingId(null);
-    setFormData({ nome: "", email: "", telefono: "", azienda: "" });
+
+    setFormData({
+      nome: "",
+      email: "",
+      telefono: "",
+      azienda: "",
+    });
+
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (cliente) => {
-    if (!isAdmin) {
-      alert("Non hai i permessi per modificare questo cliente.");
-      return;
-    }
-    
+  const openEditModal = (cliente) => {
     setEditingId(cliente.id);
+
     setFormData({
       nome: cliente.nome || "",
       email: cliente.email || "",
       telefono: cliente.telefono || "",
       azienda: cliente.azienda || "",
     });
+
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
 
-    if (!formData.nome.trim()) {
-      alert("Inserisci almeno il nome del cliente");
+    setFormData({
+      nome: "",
+      email: "",
+      telefono: "",
+      azienda: "",
+    });
+  };
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    try {
+      setErrorMessage("");
+
+      const payload = {
+        nome: formData.nome.trim(),
+        email: formData.email.trim(),
+        telefono: formData.telefono.trim(),
+        azienda: formData.azienda.trim(),
+      };
+
+      if (!payload.nome) {
+        setErrorMessage("Il nome del cliente è obbligatorio.");
+        return;
+      }
+
+      if (editingId) {
+        const { error } = await supabase
+          .from("clienti")
+          .update(payload)
+          .eq("id", editingId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("clienti")
+          .insert([payload]);
+
+        if (error) throw error;
+      }
+
+      closeModal();
+
+      await fetchClienti();
+    } catch (error) {
+      console.error("Errore salvataggio cliente:", error);
+
+      setErrorMessage(
+        error?.message ||
+          "Si è verificato un errore durante il salvataggio del cliente.",
+      );
+    }
+  };
+
+  /*
+   * Apre il modale di conferma eliminazione.
+   */
+  const openDeleteModal = (cliente) => {
+    setClienteDaEliminare(cliente);
+    setIsDeleteModalOpen(true);
+  };
+
+  /*
+   * Chiude il modale di conferma.
+   */
+  const closeDeleteModal = () => {
+    if (isDeleting) {
       return;
     }
 
-    const payload = {
-      nome: formData.nome.trim(),
-      email: formData.email ? formData.email.trim() : null,
-      telefono: formData.telefono ? formData.telefono.trim() : null,
-      azienda: formData.azienda ? formData.azienda.trim() : null,
-    };
+    setIsDeleteModalOpen(false);
+    setClienteDaEliminare(null);
+  };
 
-    if (editingId) {
-      // Blocco di sicurezza lato funzione
-      if (!isAdmin) return;
+  /*
+   * Elimina definitivamente il cliente.
+   */
+  const handleDelete = async () => {
+    if (!clienteDaEliminare) {
+      return;
+    }
 
-      const { error } = await supabase
+    try {
+      setIsDeleting(true);
+      setErrorMessage("");
+
+      /*
+       * Elimina prima i progetti collegati al cliente.
+       *
+       * Se hai ON DELETE CASCADE sulla foreign key
+       * progetti.cliente_id, questa parte può essere rimossa.
+       */
+      const { error: progettiError } = await supabase
+        .from("progetti")
+        .delete()
+        .eq("cliente_id", clienteDaEliminare.id);
+
+      if (progettiError) {
+        throw progettiError;
+      }
+
+      const { error: clienteError } = await supabase
         .from("clienti")
-        .update(payload)
-        .eq("id", editingId);
+        .delete()
+        .eq("id", clienteDaEliminare.id);
 
-      if (error) {
-        console.error("Errore durante l'aggiornamento del cliente:", error);
-        alert("Si è verificato un errore durante la modifica del cliente.");
-      } else {
-        setIsModalOpen(false);
-        fetchClienti();
+      if (clienteError) {
+        throw clienteError;
       }
-    } else {
-      const { error } = await supabase.from("clienti").insert([payload]);
 
-      if (error) {
-        console.error("Errore durante il salvataggio del cliente:", error);
-        alert("Si è verificato un errore durante la creazione del cliente.");
-      } else {
-        setIsModalOpen(false);
-        fetchClienti();
-      }
+      setIsDeleteModalOpen(false);
+      setClienteDaEliminare(null);
+
+      await fetchClienti();
+    } catch (error) {
+      console.error("Errore eliminazione cliente:", error);
+
+      setErrorMessage(
+        error?.message ||
+          "Si è verificato un errore durante l'eliminazione del cliente.",
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
-
-  const handleDelete = async (id, nome) => {
-    if (!isAdmin) {
-      alert("Non hai i permessi per eliminare questo cliente.");
-      return;
-    }
-
-    if (!window.confirm(`Sei sicuro di voler eliminare il cliente "${nome}"?`)) {
-      return;
-    }
-
-    const { error } = await supabase.from("clienti").delete().eq("id", id);
-
-    if (error) {
-      console.error("Errore durante l'eliminazione del cliente:", error);
-      alert("Impossibile eliminare il cliente. Verificare che non sia associato a dei progetti.");
-    } else {
-      fetchClienti();
-    }
-  };
-
-  const clientiFiltrati = clienti.filter((c) => {
-    if (!searchTerm) return true;
-    const ricerca = searchTerm.toLowerCase();
-
-    const nome = (c.nome || "").toLowerCase();
-    const azienda = (c.azienda || "").toLowerCase();
-    const telefono = (c.telefono || "").toLowerCase();
-    const email = (c.email || "").toLowerCase();
-
-    return (
-      nome.includes(ricerca) ||
-      azienda.includes(ricerca) ||
-      telefono.includes(ricerca) ||
-      email.includes(ricerca)
-    );
-  });
 
   return (
-    <div className="container mt-4">
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2>Lista Clienti</h2>
-        <div className="d-flex align-items-center gap-2">
-          <button className="add-new-task" onClick={handleOpenCreateModal}>
-            <b>
-              <i className="bi bi-person-plus-fill me-1"></i> Nuovo Cliente
-            </b>
-          </button>
-          <button className="add-new-task" onClick={fetchClienti}>
-            <b>
-              <i className="bi bi-arrow-clockwise me-1"></i> Aggiorna
-            </b>
+    <div className="task-page">
+      {/* HEADER */}
+      <div className="task-page-header">
+        <div>
+          <div className="task-page-title-row">
+            <h1 className="task-page-heading">Clienti</h1>
+
+            <span className="task-company-badge">
+              {totaleClienti}{" "}
+              {totaleClienti === 1 ? "cliente" : "clienti"}
+            </span>
+          </div>
+
+          <p>
+            Gestisci anagrafiche, aziende, contatti e progetti dei clienti.
+          </p>
+        </div>
+
+        <div className="task-page-actions">
+          {isAdmin && (
+            <button
+              type="button"
+              className="task-page-button primary"
+              onClick={openCreateModal}
+            >
+              <i className="bi bi-plus-lg" />
+              Nuovo Cliente
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="task-page-button secondary"
+            onClick={fetchClienti}
+            disabled={loading}
+          >
+            <i className="bi bi-arrow-clockwise" />
+            Aggiorna
           </button>
         </div>
       </div>
 
+      {/* ERRORE */}
       {errorMessage && (
-        <div className="alert alert-danger rounded-4 border-0 shadow-sm mb-4">
-          <i className="bi bi-exclamation-triangle-fill me-2"></i>
-          <strong>Errore DB:</strong> {errorMessage}
+        <div
+          role="alert"
+          style={{
+            marginBottom: "20px",
+            padding: "14px 16px",
+            border: "1px solid #f5c2c7",
+            borderRadius: "10px",
+            background: "#f8d7da",
+            color: "#842029",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <i className="bi bi-exclamation-triangle-fill" />
+          <span>{errorMessage}</span>
         </div>
       )}
 
-      {/* Barra di ricerca arrotondata e pulita */}
-      <div className="mb-4">
-        <div className="input-group search-bar-clean align-items-center">
-          <span className="bg-transparent border-0 pe-2">
-            <i className="bi bi-search text-muted"></i>
-          </span>
-          <input
-            type="text"
-            className="form-control bg-transparent border-0 ps-0 shadow-none"
-            placeholder="Cerca cliente per nome, azienda, telefono o email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* METRICHE */}
+      <div className="clients-metrics-grid">
+        <div className="clients-metric-card">
+          <div className="clients-metric-icon">
+            <i className="bi bi-people" />
+          </div>
+
+          <div className="clients-metric-content">
+            <div className="clients-metric-value">{totaleClienti}</div>
+            <div className="clients-metric-label">Totale clienti</div>
+          </div>
+        </div>
+
+        <div className="clients-metric-card">
+          <div className="clients-metric-icon">
+            <i className="bi bi-building" />
+          </div>
+
+          <div className="clients-metric-content">
+            <div className="clients-metric-value">
+              {clientiConAzienda}
+            </div>
+            <div className="clients-metric-label">Con azienda</div>
+          </div>
+        </div>
+
+        <div className="clients-metric-card">
+          <div className="clients-metric-icon">
+            <i className="bi bi-envelope" />
+          </div>
+
+          <div className="clients-metric-content">
+            <div className="clients-metric-value">{clientiConEmail}</div>
+            <div className="clients-metric-label">Con email</div>
+          </div>
+        </div>
+
+        <div className="clients-metric-card">
+          <div className="clients-metric-icon">
+            <i className="bi bi-kanban" />
+          </div>
+
+          <div className="clients-metric-content">
+            <div className="clients-metric-value">{progetti.length}</div>
+            <div className="clients-metric-label">Progetti totali</div>
+          </div>
         </div>
       </div>
 
+      {/* RICERCA */}
+      <div className="task-search">
+        <i className="bi bi-search" />
+
+        <input
+          type="text"
+          placeholder="Cerca cliente, azienda, email, telefono o progetto..."
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+      </div>
+
+      {/* CONTENUTO */}
       {loading ? (
-        <div className="text-center my-5">
+        <div className="task-loading">
           <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Caricamento clienti...</span>
+            <span className="visually-hidden">
+              Caricamento clienti...
+            </span>
           </div>
         </div>
       ) : clientiFiltrati.length === 0 ? (
-        <div className="alert alert-light rounded-4 text-muted text-center border-0 p-4">
-          {searchTerm
-            ? "Nessun cliente corrisponde ai criteri di ricerca."
-            : "Nessun cliente registrato nel sistema."}
+        <div className="task-empty">
+          <i className="bi bi-people" />
+
+          <h3>Nessun cliente trovato</h3>
+
+          <p>
+            {searchTerm
+              ? "Nessun cliente corrisponde ai criteri di ricerca."
+              : "Non sono ancora presenti clienti."}
+          </p>
         </div>
       ) : (
-        <div className="table-responsive shadow-sm rounded-4 border-0">
-          <table className="table table-hover align-middle mb-0 bg-white">
-            <thead className="table-light">
+        <div
+          className="task-table-wrapper"
+          style={{
+            overflowX: "auto",
+            width: "100%",
+          }}
+        >
+          <table
+            className="task-table"
+            style={{
+              width: "100%",
+              minWidth: "1350px",
+              tableLayout: "auto",
+            }}
+          >
+            <thead>
               <tr>
-                <th>Nome</th>
-                <th>Azienda</th>
-                <th>Email</th>
-                <th>Numero di Telefono</th>
-                <th className="text-end">Azioni</th>
+                <th style={{ minWidth: "220px" }}>Nome</th>
+                <th style={{ minWidth: "200px" }}>Azienda</th>
+                <th style={{ minWidth: "280px" }}>Email</th>
+                <th style={{ minWidth: "180px" }}>Telefono</th>
+                <th style={{ minWidth: "350px" }}>Progetti</th>
+                <th style={{ minWidth: "220px" }}>Azioni</th>
               </tr>
             </thead>
+
             <tbody>
-              {clientiFiltrati.map((cliente, index) => {
-                const nomeMostrato = cliente.nome || "Cliente senza nome";
+              {clientiFiltrati.map((cliente) => {
+                const progettiCliente =
+                  progettiPerCliente[cliente.id] || [];
 
                 return (
-                  <tr key={cliente.id || index}>
+                  <tr key={cliente.id}>
+                    {/* NOME */}
                     <td>
-                      <div className="d-flex align-items-center">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
                         <div
-                          className="rounded-circle bg-light text-dark d-flex align-items-center justify-content-center me-2"
-                          style={{ width: "36px", height: "36px", fontWeight: "600", fontSize: "0.9rem" }}
+                          className="task-metric-icon"
+                          style={{
+                            width: "38px",
+                            height: "38px",
+                            minWidth: "38px",
+                          }}
                         >
-                          {(cliente.nome || "C").charAt(0).toUpperCase()}
+                          <i className="bi bi-person" />
                         </div>
-                        <strong>{nomeMostrato}</strong>
+
+                        <div>
+                          <strong>{cliente.nome || "—"}</strong>
+
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#6c757d",
+                            }}
+                          >
+                            Cliente
+                          </div>
+                        </div>
                       </div>
                     </td>
+
+                    {/* AZIENDA */}
                     <td>
                       {cliente.azienda ? (
-                        <span className="badge bg-light text-dark border-0 rounded-pill px-3 py-2">
-                          <i className="bi bi-building me-1"></i>
-                          {cliente.azienda}
-                        </span>
+                        <div className="task-project">
+                          <i className="bi bi-building" />
+
+                          <span
+                            style={{
+                              whiteSpace: "normal",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {cliente.azienda}
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-muted small">-</span>
+                        <span className="task-no-project">
+                          Nessuna azienda
+                        </span>
                       )}
                     </td>
+
+                    {/* EMAIL */}
                     <td>
                       {cliente.email ? (
                         <a
                           href={`mailto:${cliente.email}`}
-                          className="text-decoration-none text-secondary"
+                          className="task-assignee"
+                          style={{
+                            whiteSpace: "normal",
+                            overflowWrap: "anywhere",
+                          }}
                         >
-                          <i className="bi bi-envelope me-1"></i>
-                          {cliente.email}
+                          <i className="bi bi-envelope" />
+                          <span>{cliente.email}</span>
                         </a>
                       ) : (
-                        <span className="text-muted small">-</span>
+                        <span className="task-no-assignee">
+                          Nessuna email
+                        </span>
                       )}
                     </td>
+
+                    {/* TELEFONO */}
                     <td>
                       {cliente.telefono ? (
                         <a
                           href={`tel:${cliente.telefono}`}
-                          className="text-decoration-none text-secondary"
+                          className="task-assignee"
+                          style={{
+                            whiteSpace: "normal",
+                            overflowWrap: "anywhere",
+                          }}
                         >
-                          <i className="bi bi-telephone me-2 text-muted"></i>
-                          {cliente.telefono}
+                          <i className="bi bi-telephone" />
+                          <span>{cliente.telefono}</span>
                         </a>
                       ) : (
-                        <span className="text-muted small">-</span>
-                      )}
-                    </td>
-                    <td className="text-end">
-                      {isAdmin ? (
-                        <>
-                          <button
-                            className="add-new-task me-2"
-                            style={{ backgroundColor: "#ffc107", color: "#fff" }}
-                            onClick={() => handleOpenEditModal(cliente)}
-                          >
-                            <b>
-                              <i className="bi bi-pencil-fill me-1"></i> Modifica
-                            </b>
-                          </button>
-                          <button
-                            className="add-new-task"
-                            style={{ backgroundColor: "#dc3545", color: "#fff" }}
-                            onClick={() => handleDelete(cliente.id, nomeMostrato)}
-                          >
-                            <b>
-                              <i className="bi bi-trash-fill me-1"></i> Elimina
-                            </b>
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-muted small" title="Solo gli admin possono gestire i clienti">
-                          <i className="bi bi-lock-fill me-1"></i> Sola lettura
+                        <span className="task-no-assignee">
+                          Nessun telefono
                         </span>
                       )}
+                    </td>
+
+                    {/* PROGETTI */}
+                    <td>
+                      {progettiCliente.length > 0 ? (
+                        <div className="client-projects-list">
+                          {progettiCliente.map((progetto) => (
+                            <div
+                              key={progetto.id}
+                              className="client-project-badge"
+                            >
+                              <i className="bi bi-kanban" />
+
+                              <span>
+                                {progetto.nome ||
+                                  "Progetto senza nome"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="task-no-project">
+                          Nessun progetto
+                        </span>
+                      )}
+                    </td>
+
+                    {/* AZIONI */}
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {isAdmin ? (
+                          <>
+                            <button
+                              type="button"
+                              className="task-page-button secondary"
+                              onClick={() => openEditModal(cliente)}
+                            >
+                              <i className="bi bi-pencil" />
+                              Modifica
+                            </button>
+
+                            <button
+                              type="button"
+                              className="task-page-button danger"
+                              onClick={() => openDeleteModal(cliente)}
+                            >
+                              <i className="bi bi-trash" />
+                              Elimina
+                            </button>
+                          </>
+                        ) : (
+                          <span className="task-no-assignee">
+                            Sola lettura
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -327,77 +675,196 @@ function ClientsPage() {
         </div>
       )}
 
-      {/* Modale Creazione / Modifica Cliente */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-3">
-          <h3 className="modal-title mb-4">
-            {editingId ? "Modifica Cliente" : "Nuovo Cliente"}
-          </h3>
+      {/* MODALE CLIENTE */}
+      <Modal isOpen={isModalOpen} onClose={closeModal}>
+        <div className="task-modal">
+          <div className="task-modal-header">
+            <div className="task-modal-heading">
+              <div className="task-modal-icon">
+                <i
+                  className={
+                    editingId
+                      ? "bi bi-pencil-square"
+                      : "bi bi-person-plus"
+                  }
+                />
+              </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Nome / Referente *</label>
-              <input
-                type="text"
-                name="nome"
-                value={formData.nome}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="Es. Mario Rossi"
-                required
-              />
+              <div>
+                <h2>
+                  {editingId ? "Modifica cliente" : "Nuovo cliente"}
+                </h2>
+
+                <p>
+                  {editingId
+                    ? "Modifica i dati del cliente."
+                    : "Inserisci i dati del nuovo cliente."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form
+            className="task-create-form"
+            onSubmit={handleSubmit}
+          >
+            <div className="task-form-grid">
+              {/* NOME */}
+              <div className="task-form-group">
+                <label htmlFor="nome">Nome</label>
+
+                <input
+                  id="nome"
+                  name="nome"
+                  type="text"
+                  value={formData.nome}
+                  onChange={handleInputChange}
+                  placeholder="Nome cliente"
+                  required
+                />
+              </div>
+
+              {/* AZIENDA */}
+              <div className="task-form-group">
+                <label htmlFor="azienda">Azienda</label>
+
+                <input
+                  id="azienda"
+                  name="azienda"
+                  type="text"
+                  value={formData.azienda}
+                  onChange={handleInputChange}
+                  placeholder="Azienda"
+                />
+              </div>
+
+              {/* EMAIL */}
+              <div className="task-form-group">
+                <label htmlFor="email">Email</label>
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="email@esempio.it"
+                />
+              </div>
+
+              {/* TELEFONO */}
+              <div className="task-form-group">
+                <label htmlFor="telefono">Telefono</label>
+
+                <input
+                  id="telefono"
+                  name="telefono"
+                  type="tel"
+                  value={formData.telefono}
+                  onChange={handleInputChange}
+                  placeholder="+39 ..."
+                />
+              </div>
             </div>
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Azienda</label>
-              <input
-                type="text"
-                name="azienda"
-                value={formData.azienda}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="Es. Acme S.r.l."
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="mario.rossi@azienda.it"
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="form-label fw-semibold">Telefono</label>
-              <input
-                type="tel"
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="+39 333 1234567"
-              />
-            </div>
-
-            <div className="d-flex justify-content-end gap-2">
+            <div className="task-modal-actions">
               <button
                 type="button"
-                className="add-new-task"
-                style={{ backgroundColor: "#dc3545", color: "#fff" }}
-                onClick={() => setIsModalOpen(false)}
+                className="task-page-button secondary"
+                onClick={closeModal}
               >
-                <b>Annulla</b>
+                Annulla
               </button>
-              <button type="submit" className="add-new-task">
-                <b>{editingId ? "Salva Modifiche" : "Salva Cliente"}</b>
+
+              <button
+                type="submit"
+                className="task-page-button primary"
+              >
+                <i
+                  className={
+                    editingId
+                      ? "bi bi-check-lg"
+                      : "bi bi-plus-lg"
+                  }
+                />
+
+                {editingId ? "Salva modifiche" : "Crea cliente"}
               </button>
             </div>
           </form>
+        </div>
+      </Modal>
+
+      {/* MODALE CONFERMA ELIMINAZIONE */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+      >
+        <div className="task-modal client-delete-modal">
+          <div className="task-modal-header">
+            <div className="task-modal-heading">
+              <div
+                className="task-modal-icon client-delete-icon"
+              >
+                <i className="bi bi-trash3" />
+              </div>
+
+              <div>
+                <h2>Elimina cliente</h2>
+
+                <p>
+                  Questa operazione non può essere annullata.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="client-delete-content">
+            <p>
+              Sei sicuro di voler eliminare il cliente{" "}
+              <strong>
+                "{clienteDaEliminare?.nome || "questo cliente"}"
+              </strong>
+              ?
+            </p>
+
+            <div className="client-delete-warning">
+              <i className="bi bi-exclamation-triangle-fill" />
+
+              <span>
+                Verranno eliminati anche tutti i progetti
+                collegati a questo cliente.
+              </span>
+            </div>
+          </div>
+
+          <div className="task-modal-actions">
+            <button
+              type="button"
+              className="task-page-button secondary"
+              onClick={closeDeleteModal}
+              disabled={isDeleting}
+            >
+              Annulla
+            </button>
+
+            <button
+              type="button"
+              className="task-page-button danger"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              <i
+                className={
+                  isDeleting
+                    ? "bi bi-hourglass-split"
+                    : "bi bi-trash3"
+                }
+              />
+
+              {isDeleting ? "Eliminazione..." : "Elimina cliente"}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

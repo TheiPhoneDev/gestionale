@@ -1,0 +1,862 @@
+/* =========================================================
+   PAGINA PROGETTI
+   ========================================================= */
+
+.projects-page {
+  width: 100%;
+  min-height: calc(100vh - 60px);
+  padding: 32px 36px 48px;
+  background: #f6f7fb;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.projects-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.projects-page-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  color: #6366f1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.projects-page-title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.9rem;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.projects-page-subtitle {
+  margin: 7px 0 0;
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
+/* =========================================================
+   BOTTONI
+   ========================================================= */
+
+.projects-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+  box-shadow: 0 5px 14px rgba(79, 70, 229, 0.18);
+}
+
+.projects-primary-button:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(79, 70, 229, 0.22);
+}
+
+.projects-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.projects-secondary-button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.projects-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.projects-filters {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.projects-filter-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.projects-filter-button:hover {
+  color: #374151;
+  background: #f9fafb;
+}
+
+.projects-filter-button-active {
+  background: #111827;
+  color: #fff;
+}
+
+.projects-filter-button-active:hover {
+  background: #111827;
+  color: #fff;
+}
+
+.projects-search {
+  display: flex;
+  align-items: center;
+  width: 360px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.projects-search:focus-within {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+}
+
+.projects-search > i {
+  margin-right: 9px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.projects-search input {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #111827;
+  font-size: 0.82rem;
+}
+
+.projects-search input::placeholder {
+  color: #9ca3af;
+}
+
+.projects-search button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.projects-search button:hover {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* =========================================================
+   CARD
+   ========================================================= */
+
+.projects-card {
+  overflow: hidden;
+  border: 1px solid #e8eaf0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+}
+
+.projects-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 68px;
+  padding: 0 22px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.projects-card-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.projects-card-header span {
+  display: block;
+  margin-top: 3px;
+  color: #9ca3af;
+  font-size: 0.74rem;
+}
+
+/* =========================================================
+   TABELLA
+   ========================================================= */
+
+.projects-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.projects-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.projects-table thead th {
+  height: 44px;
+  padding: 0 18px;
+  border-bottom: 1px solid #eef0f4;
+  background: #fafbfc;
+  color: #9ca3af;
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.projects-table tbody tr {
+  border-bottom: 1px solid #f0f1f4;
+  transition: background 0.15s ease;
+}
+
+.projects-table tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.projects-table tbody tr:hover {
+  background: #fafbff;
+}
+
+.projects-table tbody td {
+  height: 74px;
+  padding: 10px 18px;
+  color: #374151;
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.projects-actions-column {
+  width: 140px;
+  text-align: right !important;
+}
+
+/* =========================================================
+   PROGETTO
+   ========================================================= */
+
+.project-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.project-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.95rem;
+}
+
+.project-name {
+  color: #1f2937;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.project-description {
+  max-width: 310px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #9ca3af;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   CLIENTE
+   ========================================================= */
+
+.project-client-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 190px;
+}
+
+.project-client-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.project-client-name {
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.project-client-company {
+  margin-top: 2px;
+  color: #9ca3af;
+  font-size: 0.7rem;
+}
+
+/* =========================================================
+   TASK
+   ========================================================= */
+
+.project-task-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.project-task-count i {
+  color: #9ca3af;
+}
+
+/* =========================================================
+   STATO
+   ========================================================= */
+
+.project-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.project-status-completed {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.project-status-progress {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.project-status-paused {
+  background: #fefce8;
+  color: #a16207;
+}
+
+.project-status-default {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* =========================================================
+   AZIONI
+   ========================================================= */
+
+.project-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.project-action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.76rem;
+  transition: all 0.16s ease;
+}
+
+.project-action-view {
+  color: #4f46e5;
+}
+
+.project-action-view:hover {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.project-action-edit {
+  color: #b45309;
+}
+
+.project-action-edit:hover {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.project-action-delete {
+  color: #dc2626;
+}
+
+.project-action-delete:hover {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.projects-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 40px;
+  text-align: center;
+}
+
+.projects-empty-state .spinner-border {
+  width: 30px;
+  height: 30px;
+}
+
+.projects-empty-state p {
+  margin: 12px 0 0;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+.projects-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-size: 1.35rem;
+}
+
+.projects-empty-state h3 {
+  margin: 0;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.projects-empty-state .projects-secondary-button {
+  margin-top: 16px;
+}
+
+/* =========================================================
+   FORM MODALE
+   ========================================================= */
+
+.project-form {
+  width: 100%;
+}
+
+.project-form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.project-form-header > div:first-child {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.project-form-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 1rem;
+}
+
+.project-form-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+
+.project-form-header p {
+  margin: 4px 0 0;
+  color: #9ca3af;
+  font-size: 0.78rem;
+}
+
+.project-form-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.project-form-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.project-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.project-form-field {
+  min-width: 0;
+}
+
+.project-form-field-full {
+  grid-column: 1 / -1;
+}
+
+.project-form-field label {
+  display: block;
+  margin-bottom: 7px;
+  color: #374151;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.project-form-field input,
+.project-form-field select,
+.project-form-field textarea {
+  width: 100%;
+  border: 1px solid #e2e5eb;
+  border-radius: 9px;
+  outline: none;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 0.82rem;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+  box-sizing: border-box;
+}
+
+.project-form-field input,
+.project-form-field select {
+  height: 42px;
+  padding: 0 12px;
+}
+
+.project-form-field textarea {
+  min-height: 110px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.project-form-field input::placeholder,
+.project-form-field textarea::placeholder {
+  color: #b0b5bf;
+}
+
+.project-form-field input:focus,
+.project-form-field select:focus,
+.project-form-field textarea:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+}
+
+/* =========================================================
+   DROPDOWN CLIENTE
+   ========================================================= */
+
+.project-client-dropdown {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 42px;
+  padding: 0 12px !important;
+  border: 1px solid #e2e5eb !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #374151 !important;
+  font-size: 0.82rem !important;
+  box-shadow: none !important;
+}
+
+.project-client-dropdown::after {
+  margin-left: 10px;
+}
+
+.project-client-dropdown:hover,
+.project-client-dropdown:focus,
+.project-client-dropdown:active {
+  border-color: #a5b4fc !important;
+  background: #fff !important;
+  color: #374151 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08) !important;
+}
+
+.project-client-dropdown-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-client-dropdown-menu {
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.project-client-dropdown-menu .dropdown-item {
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: #374151;
+  font-size: 0.78rem;
+}
+
+.project-client-dropdown-menu .dropdown-item:hover {
+  background: #f5f6ff;
+  color: #3730a3;
+}
+
+.project-client-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-client-option strong {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.project-client-option small {
+  color: #9ca3af;
+  font-size: 0.68rem;
+}
+
+/* =========================================================
+   FOOTER FORM
+   ========================================================= */
+
+.project-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #eef0f4;
+}
+
+/* =========================================================
+   MODALE ELIMINAZIONE
+   ========================================================= */
+
+.project-delete-modal {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 12px 8px 4px;
+  text-align: center;
+}
+
+.project-delete-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 17px;
+  border-radius: 14px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 1.25rem;
+}
+
+.project-delete-modal h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.1rem;
+  font-weight: 750;
+}
+
+.project-delete-modal p {
+  margin: 9px 0 5px;
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.project-delete-modal p strong {
+  color: #374151;
+}
+
+.project-delete-warning {
+  display: block;
+  margin-top: 5px;
+  color: #dc2626;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.project-delete-actions {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 25px;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1000px) {
+  .projects-page {
+    padding: 25px 24px 40px;
+  }
+
+  .projects-page-header {
+    flex-direction: column;
+  }
+
+  .projects-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .projects-search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .projects-page {
+    padding: 20px 16px 32px;
+  }
+
+  .projects-page-title {
+    font-size: 1.55rem;
+  }
+
+  .projects-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-form-field-full {
+    grid-column: auto;
+  }
+
+  .projects-card-header {
+    padding: 0 16px;
+  }
+
+  .projects-table thead th,
+  .projects-table tbody td {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

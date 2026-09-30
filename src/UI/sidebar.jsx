@@ -1,224 +1,423 @@
-import "../App.css";
 import "./sidebar.css";
-import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
+
 import { useState } from "react";
 
-// Palette di colori per l'avatar
+// ============================================================
+// COLORI AVATAR
+// ============================================================
+
 const COLORI_AVATAR = [
-  "#0d6efd", // Blu
-  "#6f42c1", // Viola
-  "#d63384", // Rosa
-  "#dc3545", // Rosso
-  "#fd7e14", // Arancione
-  "#198754", // Verde
-  "#20c997", // Smeraldo
-  "#0dcaf0", // Azzurro
+  "#0d6efd",
+  "#6f42c1",
+  "#d63384",
+  "#dc3545",
+  "#fd7e14",
+  "#198754",
+  "#20c997",
+  "#0dcaf0",
 ];
+
+// ============================================================
+// UTILITY AVATAR
+// ============================================================
 
 const getAvatarBgColor = (str = "") => {
   let hash = 0;
+
   for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    hash =
+      str.charCodeAt(i) +
+      ((hash << 5) - hash);
   }
-  const index = Math.abs(hash) % COLORI_AVATAR.length;
+
+  const index =
+    Math.abs(hash) % COLORI_AVATAR.length;
+
   return COLORI_AVATAR[index];
 };
 
 const getIniziali = (currentUser) => {
-  if (!currentUser) return "U";
-  if (currentUser.nome || currentUser.cognome) {
-    const n = (currentUser.nome || "").charAt(0);
-    const c = (currentUser.cognome || "").charAt(0);
+  if (!currentUser) {
+    return "U";
+  }
+
+  if (
+    currentUser.nome ||
+    currentUser.cognome
+  ) {
+    const n = (
+      currentUser.nome || ""
+    ).charAt(0);
+
+    const c = (
+      currentUser.cognome || ""
+    ).charAt(0);
+
     return `${n}${c}`.toUpperCase() || "U";
   }
+
   if (currentUser.email) {
-    return currentUser.email.charAt(0).toUpperCase();
+    return currentUser.email
+      .charAt(0)
+      .toUpperCase();
   }
+
   return "U";
 };
 
-function Sidebar({ activePage, onPageChange, currentUser }) {
-  const [activeId, setActiveId] = useState("dashboard");
+// ============================================================
+// SIDEBAR
+// ============================================================
 
-  // Controllo ruolo Admin per i menu riservati
-  const ruoloLower = (currentUser?.ruolo || "").toLowerCase();
-  const isAdmin = ruoloLower === "admin" || ruoloLower === "administrator";
+function Sidebar({
+  activePage,
+  onPageChange,
+  currentUser,
+  onCreateTask,
+}) {
+  const [activeId, setActiveId] =
+    useState("dashboard");
 
-  const filteredSidebarElements = sidebarElements.filter((item) => {
-    if (item.adminOnly) return isAdmin;
-    return true;
-  });
+  // ==========================================================
+  // CONTROLLO RUOLO ADMIN
+  // ==========================================================
+
+  const ruoloLower = (
+    currentUser?.ruolo || ""
+  ).toLowerCase();
+
+  const isAdmin =
+    ruoloLower === "admin" ||
+    ruoloLower === "administrator";
+
+  // ==========================================================
+  // FILTRA ELEMENTI RISERVATI AGLI ADMIN
+  // ==========================================================
+
+  const filteredSidebarElements =
+    sidebarElements.filter((item) => {
+      if (item.adminOnly) {
+        return isAdmin;
+      }
+
+      return true;
+    });
+
+  // ==========================================================
+  // INFORMAZIONI UTENTE
+  // ==========================================================
 
   const nomeUtente = currentUser
-    ? `${currentUser.nome || ""} ${currentUser.cognome || ""}`.trim() || currentUser.email
+    ? `${currentUser.nome || ""} ${
+        currentUser.cognome || ""
+      }`.trim() || currentUser.email
     : "Accedi";
 
-  const ruoloUtente = currentUser?.ruolo || "";
-  const iniziali = getIniziali(currentUser);
-  const avatarBg = getAvatarBgColor(currentUser?.id || currentUser?.email || nomeUtente);
+  const ruoloUtente =
+    currentUser?.ruolo || "";
+
+  const iniziali =
+    getIniziali(currentUser);
+
+  const avatarBg =
+    getAvatarBgColor(
+      currentUser?.id ||
+        currentUser?.email ||
+        nomeUtente
+    );
+
+  // ==========================================================
+  // CAMBIO PAGINA
+  // ==========================================================
+
+  const handlePageChange = (id) => {
+    setActiveId(id);
+
+    if (onPageChange) {
+      onPageChange(id);
+    }
+  };
+
+  // ==========================================================
+  // PAGINA ATTIVA
+  // ==========================================================
+
+  const isPageActive = (id) => {
+    if (id === activePage) {
+      return true;
+    }
+
+    if (
+      id === "projects" &&
+      typeof activePage === "string" &&
+      activePage.startsWith("progetto-")
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-menu">
-        {filteredSidebarElements.map((item) => {
-          const isActive = activePage === item.id;
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                setActiveId(item.id);
-                if (onPageChange) onPageChange(item.id);
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                width: "100%",
-                textAlign: "left",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                color: isActive ? item.color : item.color2,
-                textDecoration: "none",
-                padding: "8px 0",
-              }}
-            >
-              <span style={{ marginRight: "8px" }}>{item.icon}</span>
-              {item.label}
-            </button>
-          );
-        })}
+      {/* ======================================================
+          BRAND
+      ====================================================== */}
+
+      <div className="sidebar-brand">
+        <div className="sidebar-brand-icon">
+          <i className="bi bi-grid-1x2-fill" />
+        </div>
+
+        <div className="sidebar-brand-text">
+          Gestionale
+        </div>
       </div>
 
-      {/* Footer Sidebar con Avatar Dinamico */}
-      <div
-        className="sidebar-footer"
-        onClick={() => {
-          if (onPageChange) onPageChange("profile");
-        }}
-        style={{
-          cursor: "pointer",
-          backgroundColor: activePage === "profile" ? "rgba(255, 255, 255, 0.15)" : "transparent",
-          padding: "10px",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          transition: "background 0.2s",
-        }}
+      {/* ======================================================
+          NUOVO TASK
+      ====================================================== */}
+
+      <div className="sidebar-create-task-wrapper">
+        <button
+          type="button"
+          className="sidebar-create-task"
+          onClick={() => {
+            if (onCreateTask) {
+              onCreateTask();
+            }
+          }}
+        >
+          <span className="sidebar-create-task-icon">
+            <i className="bi bi-plus-lg" />
+          </span>
+
+          <span className="sidebar-create-task-label">
+            Nuovo Task
+          </span>
+        </button>
+      </div>
+
+      {/* ======================================================
+          MENU
+      ====================================================== */}
+
+      <div className="sidebar-scroll">
+        <nav className="sidebar-menu">
+
+          <div className="sidebar-section-title">
+            MENU
+          </div>
+
+          {filteredSidebarElements
+            .filter(
+              (item) => !item.adminOnly
+            )
+            .map((item) => {
+              const isActive =
+                isPageActive(item.id);
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`sidebar-link ${
+                    isActive
+                      ? "active"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    handlePageChange(
+                      item.id
+                    )
+                  }
+                >
+                  <span className="sidebar-icon">
+                    {item.icon}
+                  </span>
+
+                  <span className="sidebar-label">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+
+          {/* ==================================================
+              AMMINISTRAZIONE
+          ================================================== */}
+
+          {isAdmin && (
+            <>
+              <div className="sidebar-section-title sidebar-section-admin">
+                AMMINISTRAZIONE
+              </div>
+
+              {filteredSidebarElements
+                .filter(
+                  (item) =>
+                    item.adminOnly
+                )
+                .map((item) => {
+                  const isActive =
+                    isPageActive(
+                      item.id
+                    );
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`sidebar-link ${
+                        isActive
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        handlePageChange(
+                          item.id
+                        )
+                      }
+                    >
+                      <span className="sidebar-icon">
+                        {item.icon}
+                      </span>
+
+                      <span className="sidebar-label">
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+            </>
+          )}
+        </nav>
+      </div>
+
+      {/* ======================================================
+          USER PROFILE
+      ====================================================== */}
+
+      <button
+        type="button"
+        className={`sidebar-user ${
+          activePage === "profile"
+            ? "active"
+            : ""
+        }`}
+        onClick={() =>
+          handlePageChange("profile")
+        }
       >
         <div
-          className="rounded-circle text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+          className="sidebar-avatar"
           style={{
-            width: "36px",
-            height: "36px",
             backgroundColor: avatarBg,
-            fontSize: "0.85rem",
-            letterSpacing: "0.5px",
           }}
         >
           {iniziali}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <span
-            style={{
-              color: "#fff",
-              fontWeight: "bold",
-              fontSize: "0.9rem",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
+        <div className="sidebar-user-info">
+          <span className="sidebar-user-name">
             {nomeUtente}
           </span>
+
           {ruoloUtente && (
-            <span
-              style={{
-                color: "#b3b3b3",
-                fontSize: "0.75rem",
-                textTransform: "capitalize",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
+            <span className="sidebar-user-role">
               {ruoloUtente}
             </span>
           )}
         </div>
-      </div>
+
+        <i className="bi bi-chevron-right sidebar-user-arrow" />
+      </button>
     </aside>
   );
 }
 
 export default Sidebar;
 
+// ============================================================
+// MENU ITEMS
+// ============================================================
+
 const sidebarElements = [
   {
     id: "dashboard",
-    icon: <i className="bi bi-file-post"></i>,
+    icon: (
+      <i className="bi bi-grid-1x2" />
+    ),
     label: "Dashboard",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
+
   {
     id: "task",
-    icon: <i className="bi bi-list-task"></i>,
+    icon: (
+      <i className="bi bi-check2-square" />
+    ),
     label: "Task",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
+
   {
     id: "projects",
-    icon: <i className="bi bi-tools"></i>,
+    icon: (
+      <i className="bi bi-kanban" />
+    ),
     label: "Progetti",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
-   {
+
+  {
     id: "review",
-    icon: <i className="bi-clipboard-check"></i>,
+    icon: (
+      <i className="bi bi-clipboard-check" />
+    ),
     label: "Review",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
+
   {
     id: "clienti",
-    icon: <i className="bi bi-people-fill"></i>,
+    icon: (
+      <i className="bi bi-people" />
+    ),
     label: "Clienti",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
+
   {
     id: "ganttChart",
-    icon: <i className="bi bi-clipboard2-data-fill"></i>,
+    icon: (
+      <i className="bi bi-bar-chart-steps" />
+    ),
     label: "Diagramma Gantt",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: false,
   },
+
   {
     id: "performance",
-    icon: <i className="bi bi-graph-up-arrow"></i>,
+    icon: (
+      <i className="bi bi-graph-up-arrow" />
+    ),
     label: "Performance",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: true,
   },
+
   {
     id: "team",
-    icon: <i className="bi bi-person-badge-fill"></i>,
+    icon: (
+      <i className="bi bi-person-badge" />
+    ),
     label: "Gestione Team",
-    color: "#fff",
-    color2: "#515151",
     adminOnly: true,
   },
 ];

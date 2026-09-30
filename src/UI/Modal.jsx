@@ -1,22 +1,37 @@
-import "../App.css";
 import "./Modal.css";
-import "bootstrap/dist/css/bootstrap.css";
-import "bootstrap-icons/font/bootstrap-icons.min.css";
-
+import ReactDOM from "react-dom";
 
 const Modal = ({ isOpen, onClose, children }) => {
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-       
+  const modal = (
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="modal-content"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
+      >
         <div className="modal-body">
           {children}
         </div>
       </div>
     </div>
   );
+
+  return ReactDOM.createPortal(
+    modal,
+    document.body
+  );
 };
 
-export default Modal
+export default Modal;

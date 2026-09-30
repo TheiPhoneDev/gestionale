@@ -1,59 +1,217 @@
-/* RESET CONTESTO DI IMPILAMENTO SUI CONTENITORI PADRE */
-#root, 
-body, 
-html, 
-.main-content {
-  /* Nessun z-index o transform qui per non 'prigionare' la modale */
-  position: static !important;
-  z-index: auto !important;
-}
+/* ============================================================
+   GLOBAL
+============================================================ */
 
-/* 1. LAYOUT CONTENUTO PRINCIPALE */
-.main-content {
-  margin-left: 260px !important;
-  padding-top: 80px !important;
-  min-height: 100vh;
+* {
   box-sizing: border-box;
-  background-color: #f8fafc;
 }
 
-/* 2. HEADER SUPERIORE */
-header, .header, .topbar {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  height: 60px !important;
-  margin: 0 !important;
-  padding-left: 260px;
-  z-index: 1000 !important;
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
-/* 3. SIDEBAR (z-index basso) */
-.sidebar {
-  position: fixed !important;
-  top: 60px !important;
-  left: 0 !important;
-  width: 260px !important;
-  height: calc(100vh - 60px) !important;
-  z-index: 10 !important; /* Mantenuto bassissimo */
-  margin: 0 !important;
+body {
+  background: #f3f6f9;
+
+  color: #212529;
+
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 4. MODAL E BACKDROP (Sovrapposizione Assoluta) */
-.modal-backdrop,
-div[class*="backdrop"] {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 99998 !important;
+
+/* ============================================================
+   APP LAYOUT
+============================================================ */
+
+.app-layout {
+  min-height: 100vh;
+
+  background: #f3f6f9;
 }
 
-.modal, 
-.modal-dialog, 
-.modal-content,
-div[role="dialog"] {
-  z-index: 99999 !important;
+
+/* ============================================================
+   MAIN AREA
+============================================================ */
+
+.app-main {
+  min-height: 100vh;
+
+  margin-left: 260px;
+
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+}
+
+
+/* ============================================================
+   CONTENT
+============================================================ */
+
+.main-content {
+  flex: 1;
+
+  min-width: 0;
+
+  padding: 24px;
+
+  background: #f3f6f9;
+}
+
+
+/* ============================================================
+   MOBILE BLOCK
+============================================================ */
+
+.mobile-block-screen {
+  width: 100%;
+  min-height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: #f3f6f9;
+}
+
+.mobile-block-card {
+  width: 100%;
+  max-width: 400px;
+
+  padding: 32px;
+
+  background: #ffffff;
+
+  border: 1px solid #e9ebec;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 8px 30px
+    rgba(0, 0, 0, 0.06);
+
+  text-align: center;
+}
+
+.mobile-block-icon {
+  width: 64px;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0 auto 20px;
+
+  border-radius: 12px;
+
+  background: rgba(64, 81, 137, 0.1);
+
+  color: #405189;
+
+  font-size: 30px;
+}
+
+.mobile-block-card h3 {
+  margin: 0 0 10px;
+
+  color: #212529;
+
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.mobile-block-card p {
+  margin: 0;
+
+  color: #74788d;
+
+  font-size: 14px;
+
+  line-height: 1.6;
+}
+
+
+/* ============================================================
+   AUTH LOADING
+============================================================ */
+
+.auth-loading-screen {
+  min-height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #f3f6f9;
+}
+
+.auth-loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 12px;
+
+  color: #74788d;
+
+  font-size: 13px;
+}
+
+.auth-loading-spinner .spinner-border {
+  width: 28px;
+  height: 28px;
+
+  color: #405189;
+}
+
+
+/* ============================================================
+   SELECTION
+============================================================ */
+
+::selection {
+  background: rgba(64, 81, 137, 0.18);
+}
+
+
+/* ============================================================
+   SCROLLBAR
+============================================================ */
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3f6f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ced4da;
+
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #adb5bd;
 }

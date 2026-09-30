@@ -1,40 +1,46 @@
-import "../App.css";
 import "./cardHome.css";
-import "./taskCard.css"; // Importato per ereditare lo stile add-new-task
-import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
-import React, { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js"; // Client per istanza isolata
+
+import React, { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
 import Modal from "./Modal";
 import { supabase } from "../supabaseClient";
 
-// Array dei ruoli disponibili
 const RUOLI_DISPONIBILI = [
   "Developer",
   "Designer",
   "Project Manager",
   "Tester",
   "Membro",
+  "Admin"
 ];
 
-// Palette di colori per gli avatar
 const COLORI_AVATAR = [
-  "#0d6efd", // Blu
-  "#6f42c1", // Viola
-  "#d63384", // Rosa
-  "#dc3545", // Rosso
-  "#fd7e14", // Arancione
-  "#198754", // Verde
-  "#20c997", // Smeraldo
-  "#0dcaf0", // Azzurro
+  "#6574df",
+  "#9b72d8",
+  "#e86b91",
+  "#ed765f",
+  "#e6a23c",
+  "#10a98f",
+  "#36a3d9",
+  "#7b82d8",
 ];
+
+const getInitials = (member) => {
+  const nome = member?.nome || "";
+  const cognome = member?.cognome || "";
+
+  const initials = `${nome.charAt(0)}${cognome.charAt(0)}`;
+
+  return initials.toUpperCase() || "U";
+};
 
 function CardHome() {
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Stato per i dati del form
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -43,18 +49,26 @@ function CardHome() {
     ruolo: RUOLI_DISPONIBILI[0],
   });
 
-  // Caricamento dei membri dal DB
+  // =========================================================
+  // CARICAMENTO TEAM
+  // =========================================================
+
   const fetchTeam = async () => {
     setLoading(true);
+
     const { data, error } = await supabase
       .from("profili")
       .select("id, nome, cognome, ruolo");
 
     if (error) {
-      console.error("Errore durante il caricamento del team:", error);
+      console.error(
+        "Errore durante il caricamento del team:",
+        error
+      );
     } else if (data) {
       setTeam(data);
     }
+
     setLoading(false);
   };
 
@@ -62,71 +76,125 @@ function CardHome() {
     fetchTeam();
   }, []);
 
-  // Gestione input form
+  // =========================================================
+  // FORM
+  // =========================================================
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  // Registrazione nuovo utente
+  // =========================================================
+  // REGISTRAZIONE NUOVO UTENTE
+  // =========================================================
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const emailPulita = formData.email.trim();
 
-    if (!emailPulita || !formData.password || !formData.nome || !formData.cognome) {
-      alert("Compila tutti i campi obbligatori (Email, Password, Nome, Cognome)");
+    if (
+      !emailPulita ||
+      !formData.password ||
+      !formData.nome ||
+      !formData.cognome
+    ) {
+      alert(
+        "Compila tutti i campi obbligatori (Email, Password, Nome, Cognome)"
+      );
       return;
     }
 
     if (formData.password.length < 6) {
-      alert("La password deve contenere almeno 6 caratteri.");
+      alert(
+        "La password deve contenere almeno 6 caratteri."
+      );
       return;
     }
 
     try {
-      // Variabili d'ambiente gestite nativamente da Vite
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl =
+        import.meta.env.VITE_SUPABASE_URL;
+
+      const supabaseKey =
+        import.meta.env.VITE_SUPABASE_ANON_KEY;
 
       if (!supabaseUrl || !supabaseKey) {
-        throw new Error("Variabili VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY non trovate nel file .env!");
+        throw new Error(
+          "Variabili VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY non trovate nel file .env!"
+        );
       }
 
-      // 1. Client temporaneo isolato (persistSession: false impedisce il logout dell'admin)
-      const tempSupabase = createClient(supabaseUrl, supabaseKey, {
-        auth: {
-          persistSession: false,
-        },
-      });
+      /*
+       * Client temporaneo isolato.
+       *
+       * persistSession: false impedisce al nuovo signup
+       * di sostituire la sessione dell'amministratore.
+       */
 
-      // 2. Registriamo il nuovo utente usando il client temporaneo
-      const { data, error } = await tempSupabase.auth.signUp({
-        email: emailPulita,
-        password: formData.password,
-        options: {
-          data: {
-            nome: formData.nome.trim(),
-            cognome: formData.cognome.trim(),
-            ruolo: formData.ruolo,
+      const tempSupabase = createClient(
+        supabaseUrl,
+        supabaseKey,
+        {
+          auth: {
+            persistSession: false,
           },
-        },
-      });
+        }
+      );
+
+      const { error } =
+        await tempSupabase.auth.signUp({
+          email: emailPulita,
+          password: formData.password,
+          options: {
+            data: {
+              nome: formData.nome.trim(),
+              cognome: formData.cognome.trim(),
+              ruolo: formData.ruolo,
+            },
+          },
+        });
 
       if (error) {
-        console.error("Errore durante la creazione del profilo:", error);
-        alert(`Errore Supabase: ${error.message}`);
-      } else {
-        alert("Nuovo membro registrato con successo!");
-        setIsModalOpen(false);
-        resetForm();
-        fetchTeam(); // Ricarica la lista del team
+        console.error(
+          "Errore durante la creazione del profilo:",
+          error
+        );
+
+        alert(
+          `Errore Supabase: ${error.message}`
+        );
+
+        return;
       }
+
+      alert(
+        "Nuovo membro registrato con successo!"
+      );
+
+      setIsModalOpen(false);
+      resetForm();
+      fetchTeam();
     } catch (err) {
-      console.error("Errore durante la registrazione:", err);
-      alert(`Errore: ${err.message || err}`);
+      console.error(
+        "Errore durante la registrazione:",
+        err
+      );
+
+      alert(
+        `Errore: ${err.message || err}`
+      );
     }
   };
+
+  // =========================================================
+  // RESET FORM
+  // =========================================================
 
   const resetForm = () => {
     setFormData({
@@ -138,145 +206,354 @@ function CardHome() {
     });
   };
 
+  // =========================================================
+  // APERTURA MODAL
+  // =========================================================
+
+  const openModal = () => {
+    setIsModalOpen(true);
+  };
+
+  // =========================================================
+  // CHIUSURA MODAL
+  // =========================================================
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    resetForm();
+  };
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+
   return (
-    <div className="card-home-container">
-      <h2 className="cardTitle">Componenti del team</h2>
+    <>
+      {/* =====================================================
+          CARD TEAM
+          ===================================================== */}
 
-      {loading ? (
-        <p>Caricamento in corso...</p>
-      ) : (
-        <div className="team-mebers-grid">
-          {team.length === 0 ? (
-            <p>Nessun membro del team trovato.</p>
-          ) : (
-            team.map((member, index) => {
-              const backgroundColor = COLORI_AVATAR[index % COLORI_AVATAR.length];
-              const iniziali = `${(member.nome || "").charAt(0)}${(member.cognome || "").charAt(0)}`.toUpperCase() || "U";
+      <div className="card-home-container">
 
-              return (
-                <div key={member.id} className="member-space">
-                  <div
-                    className="rounded-circle text-white d-flex align-items-center justify-content-center mx-auto mb-2 fw-bold shadow-sm"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      backgroundColor: backgroundColor,
-                      fontSize: "1.25rem",
-                      letterSpacing: "1px",
-                    }}
-                  >
-                    {iniziali}
-                  </div>
-                  <h3>{member.nome}</h3>
-                  <h5>{member.cognome}</h5>
-                  {member.ruolo && <small className="text-muted">{member.ruolo}</small>}
-                </div>
-              );
-            })
-          )}
+        {/* HEADER */}
+
+        <div className="card-home-header">
+          <div className="card-home-heading">
+
+            <div className="card-home-icon">
+              <i className="bi bi-people-fill" />
+            </div>
+
+            <div>
+              <h2 className="cardTitle">
+                Team
+              </h2>
+
+              <p>
+                Persone che lavorano al gestionale
+              </p>
+            </div>
+
+          </div>
+
+          <div className="team-count">
+            {team.length}
+          </div>
         </div>
-      )}
 
-      {/* Pulsante per aprire la modale con lo stile add-new-task */}
-      <button className="add-new-task" onClick={() => setIsModalOpen(true)}>
-        <b>
-          Gestisci team <i className="bi bi-person-plus-fill ms-1"></i>
-        </b>
-      </button>
+        {/* TEAM */}
 
-      {/* Modale creazione nuovo membro */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="modal-internal-content">
-          <h3 className="modal-title mb-3">Registra Nuovo Membro</h3>
+        <div className="team-content">
 
-          <form onSubmit={handleSubmit} className="MioContenitore">
-            <div className="form-group">
-              <span>Nome *</span>
-              <input
-                type="text"
-                name="nome"
-                value={formData.nome}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="Es. Mario"
-                required
-              />
+          {loading ? (
+            <div className="team-loading">
+
+              <div className="team-loading-spinner" />
+
+              <span>
+                Caricamento team...
+              </span>
+
+            </div>
+          ) : team.length === 0 ? (
+            <div className="team-empty">
+
+              <div className="team-empty-icon">
+                <i className="bi bi-person-x" />
+              </div>
+
+              <strong>
+                Nessun membro
+              </strong>
+
+              <span>
+                Non sono ancora presenti membri nel team.
+              </span>
+
+            </div>
+          ) : (
+            <div className="team-members-grid">
+
+              {team.map((member, index) => {
+                const backgroundColor =
+                  COLORI_AVATAR[
+                    index % COLORI_AVATAR.length
+                  ];
+
+                const initials =
+                  getInitials(member);
+
+                return (
+                  <div
+                    key={member.id}
+                    className="member-card"
+                  >
+
+                    <div
+                      className="member-avatar"
+                      style={{
+                        "--avatar-color":
+                          backgroundColor,
+                      }}
+                    >
+                      {initials}
+                    </div>
+
+                    <div className="member-info">
+
+                      <strong>
+                        {member.nome || "Utente"}{" "}
+                        {member.cognome || ""}
+                      </strong>
+
+                      {member.ruolo && (
+                        <span>
+                          {member.ruolo}
+                        </span>
+                      )}
+
+                    </div>
+
+                    <div className="member-status">
+                      <span />
+                      Attivo
+                    </div>
+
+                  </div>
+                );
+              })}
+
+            </div>
+          )}
+
+        </div>
+
+        {/* FOOTER */}
+
+        <div className="card-home-footer">
+
+          <div className="team-footer-info">
+            <i className="bi bi-shield-check" />
+
+            <span>
+              Gestione membri e ruoli
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="manage-team-button"
+            onClick={openModal}
+          >
+            Gestisci team
+
+            <i className="bi bi-arrow-up-right" />
+          </button>
+
+        </div>
+
+      </div>
+
+      {/* =====================================================
+          MODAL NUOVO MEMBRO
+          ===================================================== */}
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+      >
+
+        <div className="team-modal">
+
+          {/* HEADER MODAL */}
+
+          <div className="team-modal-header">
+
+            <div className="team-modal-icon">
+              <i className="bi bi-person-plus-fill" />
             </div>
 
-            <div className="form-group">
-              <span>Cognome *</span>
-              <input
-                type="text"
-                name="cognome"
-                value={formData.cognome}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="Es. Rossi"
-                required
-              />
+            <div className="team-modal-title">
+
+              <h3>
+                Nuovo membro
+              </h3>
+
+              <p>
+                Aggiungi una nuova persona al team.
+              </p>
+
             </div>
 
-            <div className="form-group">
-              <span>Email *</span>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="mario.rossi@email.com"
-                required
-              />
+          </div>
+
+          {/* FORM */}
+
+          <form
+            onSubmit={handleSubmit}
+            className="team-form"
+          >
+
+            <div className="team-form-grid">
+
+              {/* NOME */}
+
+              <div className="team-form-field">
+
+                <label htmlFor="nome">
+                  Nome
+                </label>
+
+                <input
+                  id="nome"
+                  type="text"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleInputChange}
+                  placeholder="Es. Mario"
+                  required
+                />
+
+              </div>
+
+              {/* COGNOME */}
+
+              <div className="team-form-field">
+
+                <label htmlFor="cognome">
+                  Cognome
+                </label>
+
+                <input
+                  id="cognome"
+                  type="text"
+                  name="cognome"
+                  value={formData.cognome}
+                  onChange={handleInputChange}
+                  placeholder="Es. Rossi"
+                  required
+                />
+
+              </div>
+
+              {/* EMAIL */}
+
+              <div className="team-form-field full-width">
+
+                <label htmlFor="email">
+                  Email
+                </label>
+
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="mario.rossi@email.com"
+                  required
+                />
+
+              </div>
+
+              {/* PASSWORD */}
+
+              <div className="team-form-field">
+
+                <label htmlFor="password">
+                  Password
+                </label>
+
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Minimo 6 caratteri"
+                  required
+                />
+
+              </div>
+
+              {/* RUOLO */}
+
+              <div className="team-form-field">
+
+                <label htmlFor="ruolo">
+                  Ruolo
+                </label>
+
+                <select
+                  id="ruolo"
+                  name="ruolo"
+                  value={formData.ruolo}
+                  onChange={handleInputChange}
+                >
+                  {RUOLI_DISPONIBILI.map(
+                    (ruoloOption) => (
+                      <option
+                        key={ruoloOption}
+                        value={ruoloOption}
+                      >
+                        {ruoloOption}
+                      </option>
+                    )
+                  )}
+                </select>
+
+              </div>
+
             </div>
 
-            <div className="form-group">
-              <span>Password *</span>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="Minimo 6 caratteri"
-                required
-              />
-            </div>
+            {/* AZIONI */}
 
-            <div className="form-group full-width">
-              <span>Ruolo</span>
-              <select
-                name="ruolo"
-                value={formData.ruolo}
-                onChange={handleInputChange}
-                className="form-select"
-              >
-                {RUOLI_DISPONIBILI.map((ruoloOption, index) => (
-                  <option key={index} value={ruoloOption}>
-                    {ruoloOption}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div className="team-modal-actions">
 
-            <div className="d-flex justify-content-end gap-2 mt-4 full-width">
-              {/* Pulsante Annulla rosso con stile add-new-task */}
               <button
                 type="button"
-                className="add-new-task"
-                style={{ backgroundColor: "#dc3545", color: "#fff" }}
-                onClick={() => setIsModalOpen(false)}
+                className="team-button secondary"
+                onClick={closeModal}
               >
-                <b>Annulla</b>
+                Annulla
               </button>
-              {/* Pulsante di conferma della modale con stile add-new-task */}
-              <button type="submit" className="add-new-task">
-                <b>Salva e Registra</b>
+
+              <button
+                type="submit"
+                className="team-button primary"
+              >
+                <i className="bi bi-person-plus" />
+                Crea membro
               </button>
+
             </div>
+
           </form>
+
         </div>
+
       </Modal>
-    </div>
+    </>
   );
 }
 

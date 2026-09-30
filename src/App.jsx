@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
+
 import "./App.css";
+
 import Header from "./UI/header";
 import Sidebar from "./UI/sidebar";
+
 import { supabase } from "./supabaseClient";
 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
+
 import Dashboard from "./UI/dashboard";
 import Gantt from "./UI/gant";
 import TaskPage from "./UI/TaskPage";
@@ -18,26 +22,46 @@ import ProgettiList from "./UI/Projects";
 import ProgettoDettaglio from "./UI/ProjectsDetails";
 import Review from "./UI/Review";
 
+import TaskCard from "./UI/taskCard";
+
 function App() {
   const [paginaMostrata, selezionaPaginaMostrata] = useState("dashboard");
+
   const [session, setSession] = useState(null);
+
   const [currentUser, setCurrentUser] = useState(null);
+
   const [loadingAuth, setLoadingAuth] = useState(true);
-  
-  // Stato per gestire il blocco mobile
+
+  // ============================================================
+  // COMANDO APERTURA MODALE NUOVO TASK
+  // ============================================================
+
+  const [openCreateTask, setOpenCreateTask] = useState(false);
+
+  // ============================================================
+  // CONTROLLO DISPOSITIVI MOBILE
+  // ============================================================
+
   const [isMobile, setIsMobile] = useState(false);
 
-  // Controllo dimensioni schermo per bloccare i dispositivi mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
 
     checkMobile();
+
     window.addEventListener("resize", checkMobile);
 
-    return () => window.removeEventListener("resize", checkMobile);
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+    };
   }, []);
+
+  // ============================================================
+  // CARICAMENTO PROFILO UTENTE
+  // ============================================================
 
   const loadUserProfile = async (user) => {
     if (!user) {
@@ -52,7 +76,10 @@ function App() {
       .single();
 
     if (data) {
-      setCurrentUser({ ...data, email: user.email });
+      setCurrentUser({
+        ...data,
+        email: user.email,
+      });
     } else {
       setCurrentUser({
         id: user.id,
@@ -64,54 +91,118 @@ function App() {
     }
   };
 
+  // ============================================================
+  // AUTENTICAZIONE
+  // ============================================================
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user);
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) {
+        return;
       }
-      setLoadingAuth(false);
-    });
+
+      setSession(session);
+
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      }
+
+      if (mounted) {
+        setLoadingAuth(false);
+      }
+    };
+
+    initializeAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) {
+        return;
+      }
+
       setSession(session);
+
       if (session?.user) {
-        loadUserProfile(session.user);
+        await loadUserProfile(session.user);
       } else {
         setCurrentUser(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // ============================================================
+  // APERTURA NUOVO TASK DALLA SIDEBAR
+  // ============================================================
+
+  const handleCreateTask = () => {
+    /*
+     * IMPORTANTE:
+     * Non andiamo più alla pagina "task".
+     *
+     * Il TaskCard viene montato direttamente sotto
+     * e riceve il comando per aprire il suo modale.
+     */
+
+    setOpenCreateTask(true);
+  };
+
+  // ============================================================
+  // MOBILE
+  // ============================================================
 
   if (isMobile) {
     return (
-      <div className="d-flex flex-column justify-content-center align-items-center vh-100 text-center p-4 bg-light">
-        <div className="card shadow border-0 p-4 max-w-md rounded-4" style={{ maxWidth: "400px" }}>
-          <div className="text-primary mb-3">
-            <i className="bi bi-display fs-1"></i>
+      <div className="mobile-block-screen">
+        <div className="mobile-block-card">
+          <div className="mobile-block-icon">
+            <i className="bi bi-display" />
           </div>
-          <h3 className="fw-bold mb-2">Dispositivo non supportato</h3>
-          <p className="text-muted mb-0">
-            Questa applicazione è ottimizzata esclusivamente per schermi Desktop. Si prega di accedere da un computer per continuare ad utilizzare la piattaforma.
+
+          <h3>Dispositivo non supportato</h3>
+
+          <p>
+            Questa applicazione è ottimizzata esclusivamente per schermi
+            Desktop. Si prega di accedere da un computer per continuare ad
+            utilizzare la piattaforma.
           </p>
         </div>
       </div>
     );
   }
 
+  // ============================================================
+  // AUTH LOADING
+  // ============================================================
+
   if (loadingAuth) {
     return (
-      <div className="d-flex justify-content-center align-items-center vh-100">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Caricamento...</span>
+      <div className="auth-loading-screen">
+        <div className="auth-loading-spinner">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Caricamento...</span>
+          </div>
+
+          <span>Caricamento...</span>
         </div>
       </div>
     );
   }
+
+  // ============================================================
+  // LOGIN
+  // ============================================================
 
   if (!session) {
     return (
@@ -119,39 +210,64 @@ function App() {
     );
   }
 
-  // Routing delle pagine dell'applicazione
+  // ============================================================
+  // ROUTING INTERNO
+  // ============================================================
+
   const mostra = () => {
-    // Se la pagina attiva è un singolo progetto, mostra ProgettoDettaglio passandogli ID e funzione onBack[cite: 5]
+    // ----------------------------------------------------------
+    // DETTAGLIO PROGETTO
+    // ----------------------------------------------------------
+
     if (
       typeof paginaMostrata === "string" &&
       paginaMostrata.startsWith("progetto-")
     ) {
       const projectId = paginaMostrata.replace("progetto-", "");
+
       return (
-        <ProgettoDettaglio 
-          progettoId={projectId} 
-          onBack={(destinazione) => selezionaPaginaMostrata(destinazione)} 
+        <ProgettoDettaglio
+          progettoId={projectId}
+          onBack={(destinazione) => selezionaPaginaMostrata(destinazione)}
         />
       );
     }
 
+    // ----------------------------------------------------------
+    // PAGINE
+    // ----------------------------------------------------------
+
     switch (paginaMostrata) {
       case "dashboard":
         return <Dashboard />;
+
       case "task":
         return <TaskPage />;
-      case "projects": 
-        return <ProgettiList onSelectProgetto={(destinazione) => selezionaPaginaMostrata(destinazione)} />;
+
+      case "projects":
+        return (
+          <ProgettiList
+            onSelectProgetto={(destinazione) =>
+              selezionaPaginaMostrata(destinazione)
+            }
+          />
+        );
+
       case "clienti":
         return <ClientsPage />;
+
       case "ganttChart":
         return <Gantt />;
+
       case "review":
         return <Review />;
+
       case "team":
         return <TeamManagement />;
+
       case "performance":
         return <Performance />;
+
       case "profile":
         return (
           <ProfilePage
@@ -159,20 +275,44 @@ function App() {
             onLogout={() => selezionaPaginaMostrata("dashboard")}
           />
         );
+
       default:
         return <Dashboard />;
     }
   };
 
+  // ============================================================
+  // APP LAYOUT
+  // ============================================================
+
   return (
-    <div>
-      <Header />
+    <div className="app-layout">
+      {/* ======================================================
+          SIDEBAR
+          ====================================================== */}
+
       <Sidebar
         activePage={paginaMostrata}
         onPageChange={selezionaPaginaMostrata}
         currentUser={currentUser}
+        onCreateTask={handleCreateTask}
       />
-      <main className="main-content">{mostra()}</main>
+
+      {/* ======================================================
+          CONTENUTO PRINCIPALE
+          ====================================================== */}
+
+      <div className="app-main">
+        <Header />
+
+        <main className="main-content">{mostra()}</main>
+      </div>
+
+      <TaskCard
+        openCreateTask={openCreateTask}
+        onCreateTaskOpened={() => setOpenCreateTask(false)}
+        hideCard={true}
+      />
     </div>
   );
 }
