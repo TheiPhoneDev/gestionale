@@ -21,38 +21,74 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("Miei");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /*
+   * ============================================================
+   * FILTRI AVANZATI
+   * ============================================================
+   */
+
+  const [taskFilters, setTaskFilters] = useState({
+    assegnatoA: "",
+    assegnatoDa: "",
+    priorita: "",
+    stato: "",
+    scadenza: "",
+  });
 
   const [utenti, setUtenti] = useState([]);
 
-  const [currentProfileId, setCurrentProfileId] = useState(null);
-  const [currentUserRole, setCurrentUserRole] = useState("");
+  const [currentProfileId, setCurrentProfileId] =
+    useState(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [currentUserRole, setCurrentUserRole] =
+    useState("");
 
-  const [selectedProfili, setSelectedProfili] = useState([]);
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
 
-  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
-  const [balanceRole, setBalanceRole] = useState("Tutti");
-  const [balanceScope, setBalanceScope] = useState("scaduti");
+  const [selectedTask, setSelectedTask] =
+    useState(null);
 
-  const [noteList, setNoteList] = useState([]);
-  const [nuovaNota, setNuovaNota] = useState("");
+  const [selectedProfili, setSelectedProfili] =
+    useState([]);
 
-  const [allegatiList, setAllegatiList] = useState([]);
-  const [uploadingFile, setUploadingFile] = useState(false);
+  const [isBalanceModalOpen, setIsBalanceModalOpen] =
+    useState(false);
 
-  const [pendingFiles, setPendingFiles] = useState([]);
-  const [pendingPreviewUrls, setPendingPreviewUrls] = useState({});
+  const [balanceRole, setBalanceRole] =
+    useState("Tutti");
+
+  const [balanceScope, setBalanceScope] =
+    useState("scaduti");
+
+  const [noteList, setNoteList] =
+    useState([]);
+
+  const [nuovaNota, setNuovaNota] =
+    useState("");
+
+  const [allegatiList, setAllegatiList] =
+    useState([]);
+
+  const [uploadingFile, setUploadingFile] =
+    useState(false);
+
+  const [pendingFiles, setPendingFiles] =
+    useState([]);
+
+  const [pendingPreviewUrls, setPendingPreviewUrls] =
+    useState({});
 
   /*
    * Manteniamo gli ObjectURL anche in una ref.
-   * In questo modo possiamo revocarli senza problemi
-   * di closure/stato obsoleto.
    */
-  const pendingPreviewUrlsRef = useRef({});
+  const pendingPreviewUrlsRef =
+    useRef({});
 
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
   const [formData, setFormData] = useState({
     titolo: "",
@@ -64,7 +100,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   });
 
   const isAdmin =
-    (currentUserRole || "").trim().toLowerCase() === "admin";
+    (currentUserRole || "")
+      .trim()
+      .toLowerCase() === "admin";
 
   /*
    * ============================================================
@@ -73,11 +111,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    */
 
   const normalizeStatus = (status) => {
-    return (status || "").toString().trim().toLowerCase();
+    return (status || "")
+      .toString()
+      .trim()
+      .toLowerCase();
   };
 
   const isDone = (task) => {
-    const status = normalizeStatus(task?.stato);
+    const status = normalizeStatus(
+      task?.stato
+    );
 
     return (
       status === "done" ||
@@ -87,7 +130,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   };
 
   const isInProgress = (task) => {
-    const status = normalizeStatus(task?.stato);
+    const status = normalizeStatus(
+      task?.stato
+    );
 
     return (
       status === "in_progress" ||
@@ -105,7 +150,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       return "-";
     }
 
-    return date.toLocaleDateString("it-IT");
+    return date.toLocaleDateString(
+      "it-IT"
+    );
   };
 
   const formatDateInput = (value) => {
@@ -113,6 +160,51 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
     return String(value).split("T")[0];
   };
+
+  /*
+   * ============================================================
+   * FILTRI AVANZATI - UTILITY
+   * ============================================================
+   */
+
+  const updateTaskFilter = (
+    name,
+    value
+  ) => {
+    setTaskFilters((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const resetTaskFilters = () => {
+    setTaskFilters({
+      assegnatoA: "",
+      assegnatoDa: "",
+      priorita: "",
+      stato: "",
+      scadenza: "",
+    });
+
+    setSearchTerm("");
+
+    setPriorityFilter(
+      isAdmin ? "Tutti" : "Miei"
+    );
+  };
+
+  const activeTaskFiltersCount =
+    Object.values(taskFilters).filter(
+      Boolean
+    ).length +
+    (searchTerm.trim() ? 1 : 0) +
+    (priorityFilter !==
+    (isAdmin ? "Tutti" : "Miei")
+      ? 1
+      : 0);
+
+  const hasAdvancedFilters =
+    Object.values(taskFilters).some(Boolean);
 
   /*
    * ============================================================
@@ -139,11 +231,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     fileName = "",
     fileType = ""
   ) => {
-    const normalizedType = fileType.toLowerCase();
-    const normalizedName = fileName.toLowerCase();
+    const normalizedType =
+      fileType.toLowerCase();
+
+    const normalizedName =
+      fileName.toLowerCase();
 
     if (
-      normalizedType.startsWith("image/") ||
+      normalizedType.startsWith(
+        "image/"
+      ) ||
       /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
         normalizedName
       )
@@ -152,38 +249,57 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     }
 
     if (
-      normalizedType === "application/pdf" ||
+      normalizedType ===
+        "application/pdf" ||
       /\.pdf$/i.test(normalizedName)
     ) {
       return "bi-file-earmark-pdf";
     }
 
     if (
-      normalizedType.includes("word") ||
-      normalizedType.includes("document") ||
-      /\.(doc|docx)$/i.test(normalizedName)
+      normalizedType.includes(
+        "word"
+      ) ||
+      normalizedType.includes(
+        "document"
+      ) ||
+      /\.(doc|docx)$/i.test(
+        normalizedName
+      )
     ) {
       return "bi-file-earmark-word";
     }
 
     if (
-      normalizedType.includes("excel") ||
-      normalizedType.includes("spreadsheet") ||
-      /\.(xls|xlsx)$/i.test(normalizedName)
+      normalizedType.includes(
+        "excel"
+      ) ||
+      normalizedType.includes(
+        "spreadsheet"
+      ) ||
+      /\.(xls|xlsx)$/i.test(
+        normalizedName
+      )
     ) {
       return "bi-file-earmark-excel";
     }
 
     if (
-      normalizedType.includes("powerpoint") ||
-      /\.(ppt|pptx)$/i.test(normalizedName)
+      normalizedType.includes(
+        "powerpoint"
+      ) ||
+      /\.(ppt|pptx)$/i.test(
+        normalizedName
+      )
     ) {
       return "bi-file-earmark-ppt";
     }
 
     if (
       normalizedType.includes("zip") ||
-      /\.(zip|rar|7z)$/i.test(normalizedName)
+      /\.(zip|rar|7z)$/i.test(
+        normalizedName
+      )
     ) {
       return "bi-file-earmark-zip";
     }
@@ -195,7 +311,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     if (!file) return false;
 
     return (
-      file.tipo_file?.startsWith("image/") ||
+      file.tipo_file?.startsWith(
+        "image/"
+      ) ||
       /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
         file.nome_file || ""
       )
@@ -204,7 +322,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   const clearPendingFiles = () => {
     const urls = Object.values(
-      pendingPreviewUrlsRef.current || {}
+      pendingPreviewUrlsRef.current ||
+        {}
     );
 
     urls.forEach((url) => {
@@ -213,7 +332,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       }
     });
 
-    pendingPreviewUrlsRef.current = {};
+    pendingPreviewUrlsRef.current =
+      {};
+
     setPendingPreviewUrls({});
     setPendingFiles([]);
   };
@@ -224,66 +345,74 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const fetchCurrentUserProfile = async () => {
-    try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+  const fetchCurrentUserProfile =
+    async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-      if (authError) {
+        if (authError) {
+          console.error(
+            "Errore recupero utente autenticato:",
+            authError
+          );
+          return;
+        }
+
+        if (!user) {
+          setCurrentProfileId(null);
+          setCurrentUserRole("");
+          return;
+        }
+
+        setCurrentProfileId(user.id);
+
+        const {
+          data: profiloData,
+          error: profiloError,
+        } = await supabase
+          .from("profili")
+          .select("id, nome, cognome, ruolo")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profiloError) {
+          console.warn(
+            "Profilo non disponibile, uso l'ID Auth:",
+            profiloError
+          );
+
+          setCurrentUserRole(
+            user.user_metadata?.ruolo ||
+              ""
+          );
+
+          return;
+        }
+
+        if (profiloData) {
+          setCurrentProfileId(
+            profiloData.id
+          );
+
+          setCurrentUserRole(
+            profiloData.ruolo || ""
+          );
+        } else {
+          setCurrentUserRole(
+            user.user_metadata?.ruolo ||
+              ""
+          );
+        }
+      } catch (error) {
         console.error(
-          "Errore recupero utente autenticato:",
-          authError
-        );
-        return;
-      }
-
-      if (!user) {
-        setCurrentProfileId(null);
-        setCurrentUserRole("");
-        return;
-      }
-
-      setCurrentProfileId(user.id);
-
-      const {
-        data: profiloData,
-        error: profiloError,
-      } = await supabase
-        .from("profili")
-        .select("id, ruolo")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profiloError) {
-        console.warn(
-          "Profilo non disponibile, uso l'ID Auth:",
-          profiloError
-        );
-
-        setCurrentUserRole(
-          user.user_metadata?.ruolo || ""
-        );
-
-        return;
-      }
-
-      if (profiloData) {
-        setCurrentProfileId(profiloData.id);
-        setCurrentUserRole(profiloData.ruolo || "");
-      } else {
-        setCurrentUserRole(
-          user.user_metadata?.ruolo || ""
+          "Errore fetchCurrentUserProfile:",
+          error
         );
       }
-    } catch (error) {
-      console.error(
-        "Errore fetchCurrentUserProfile:",
-        error
-      );
-    }
-  };
+    };
 
   /*
    * ============================================================
@@ -293,10 +422,15 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   const fetchUtenti = async () => {
     try {
-      const { data, error } = await supabase
-        .from("profili")
-        .select("id, nome, cognome, ruolo")
-        .order("nome", { ascending: true });
+      const { data, error } =
+        await supabase
+          .from("profili")
+          .select(
+            "id, nome, cognome, ruolo"
+          )
+          .order("nome", {
+            ascending: true,
+          });
 
       if (error) {
         console.error(
@@ -342,17 +476,18 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         cleanProjectId
       );
 
-      const { data, error } = await supabase
-        .from("progetti")
-        .select(`
-          *,
-          clienti (
-            nome,
-            azienda
-          )
-        `)
-        .eq("id", cleanProjectId)
-        .maybeSingle();
+      const { data, error } =
+        await supabase
+          .from("progetti")
+          .select(`
+            *,
+            clienti (
+              nome,
+              azienda
+            )
+          `)
+          .eq("id", cleanProjectId)
+          .maybeSingle();
 
       if (error) {
         console.error(
@@ -376,7 +511,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       }
 
       setProgetto(data);
-      setNomeProgetto(data.nome || "");
+      setNomeProgetto(
+        data.nome || ""
+      );
 
       setNomeAzienda(
         data.clienti?.azienda ||
@@ -432,7 +569,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       } = await supabase
         .from("task")
         .select("*")
-        .eq("progetto_id", cleanProjectId)
+        .eq(
+          "progetto_id",
+          cleanProjectId
+        )
         .order("scadenza", {
           ascending: true,
         });
@@ -452,7 +592,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         return;
       }
 
-      const rawTasks = taskData || [];
+      const rawTasks =
+        taskData || [];
 
       console.log(
         "[ProjectDetails] Task caricati:",
@@ -474,21 +615,31 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       const creatorIds = [
         ...new Set(
           rawTasks
-            .map((task) => task.creato_da)
+            .map(
+              (task) =>
+                task.creato_da
+            )
             .filter(Boolean)
         ),
       ];
 
       let creators = [];
 
-      if (creatorIds.length > 0) {
+      if (
+        creatorIds.length > 0
+      ) {
         const {
           data: creatorData,
           error: creatorError,
         } = await supabase
           .from("profili")
-          .select("id, nome, cognome, ruolo")
-          .in("id", creatorIds);
+          .select(
+            "id, nome, cognome, ruolo"
+          )
+          .in(
+            "id",
+            creatorIds
+          );
 
         if (creatorError) {
           console.warn(
@@ -496,16 +647,20 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             creatorError
           );
         } else {
-          creators = creatorData || [];
+          creators =
+            creatorData || [];
         }
       }
 
-      const creatorMap = new Map(
-        creators.map((profile) => [
-          String(profile.id),
-          profile,
-        ])
-      );
+      const creatorMap =
+        new Map(
+          creators.map(
+            (profile) => [
+              String(profile.id),
+              profile,
+            ]
+          )
+        );
 
       /*
        * --------------------------------------------------------
@@ -514,19 +669,28 @@ function ProgettoDettaglio({ progettoId, onBack }) {
        */
 
       const taskIds = rawTasks
-        .map((task) => task.id)
+        .map(
+          (task) => task.id
+        )
         .filter(Boolean);
 
       let assignmentRows = [];
 
-      if (taskIds.length > 0) {
+      if (
+        taskIds.length > 0
+      ) {
         const {
           data: assignmentData,
           error: assignmentError,
         } = await supabase
           .from("task_profili")
-          .select("task_id, profilo_id")
-          .in("task_id", taskIds);
+          .select(
+            "task_id, profilo_id"
+          )
+          .in(
+            "task_id",
+            taskIds
+          );
 
         if (assignmentError) {
           console.warn(
@@ -534,7 +698,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             assignmentError
           );
         } else {
-          assignmentRows = assignmentData || [];
+          assignmentRows =
+            assignmentData || [];
         }
       }
 
@@ -547,21 +712,32 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       const assignedProfileIds = [
         ...new Set(
           assignmentRows
-            .map((row) => row.profilo_id)
+            .map(
+              (row) =>
+                row.profilo_id
+            )
             .filter(Boolean)
         ),
       ];
 
       let assignedProfiles = [];
 
-      if (assignedProfileIds.length > 0) {
+      if (
+        assignedProfileIds.length >
+        0
+      ) {
         const {
           data: profileData,
           error: profileError,
         } = await supabase
           .from("profili")
-          .select("id, nome, cognome, ruolo")
-          .in("id", assignedProfileIds);
+          .select(
+            "id, nome, cognome, ruolo"
+          )
+          .in(
+            "id",
+            assignedProfileIds
+          );
 
         if (profileError) {
           console.warn(
@@ -569,16 +745,20 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             profileError
           );
         } else {
-          assignedProfiles = profileData || [];
+          assignedProfiles =
+            profileData || [];
         }
       }
 
-      const profileMap = new Map(
-        assignedProfiles.map((profile) => [
-          String(profile.id),
-          profile,
-        ])
-      );
+      const profileMap =
+        new Map(
+          assignedProfiles.map(
+            (profile) => [
+              String(profile.id),
+              profile,
+            ]
+          )
+        );
 
       /*
        * --------------------------------------------------------
@@ -586,49 +766,68 @@ function ProgettoDettaglio({ progettoId, onBack }) {
        * --------------------------------------------------------
        */
 
-      const assignmentsMap = new Map();
+      const assignmentsMap =
+        new Map();
 
-      assignmentRows.forEach((row) => {
-        const taskKey = String(row.task_id);
+      assignmentRows.forEach(
+        (row) => {
+          const taskKey =
+            String(row.task_id);
 
-        if (!assignmentsMap.has(taskKey)) {
-          assignmentsMap.set(taskKey, []);
+          if (
+            !assignmentsMap.has(
+              taskKey
+            )
+          ) {
+            assignmentsMap.set(
+              taskKey,
+              []
+            );
+          }
+
+          const profile =
+            profileMap.get(
+              String(
+                row.profilo_id
+              )
+            );
+
+          if (profile) {
+            assignmentsMap
+              .get(taskKey)
+              .push({
+                profili: profile,
+              });
+          }
         }
-
-        const profile = profileMap.get(
-          String(row.profilo_id)
-        );
-
-        if (profile) {
-          assignmentsMap.get(taskKey).push({
-            profili: profile,
-          });
-        }
-      });
-
-      const enrichedTasks = rawTasks.map(
-        (task) => ({
-          ...task,
-
-          progetti: {
-            id: progettoId,
-            nome:
-              nomeProgetto ||
-              progetto?.nome ||
-              "",
-          },
-
-          creatore:
-            creatorMap.get(
-              String(task.creato_da)
-            ) || null,
-
-          task_profili:
-            assignmentsMap.get(
-              String(task.id)
-            ) || [],
-        })
       );
+
+      const enrichedTasks =
+        rawTasks.map(
+          (task) => ({
+            ...task,
+
+            progetti: {
+              id: progettoId,
+              nome:
+                nomeProgetto ||
+                progetto?.nome ||
+                "",
+            },
+
+            creatore:
+              creatorMap.get(
+                String(
+                  task.creato_da
+                )
+              ) || null,
+
+            task_profili:
+              assignmentsMap.get(
+                String(task.id)
+              ) || [],
+          })
+        );
 
       console.log(
         "[ProjectDetails] Task finali:",
@@ -704,19 +903,22 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   }, [progettoId]);
 
   /*
-   * Cleanup finale degli ObjectURL
+   * Cleanup ObjectURL
    */
+
   useEffect(() => {
     return () => {
       Object.values(
-        pendingPreviewUrlsRef.current || {}
+        pendingPreviewUrlsRef.current ||
+          {}
       ).forEach((url) => {
         if (url) {
           URL.revokeObjectURL(url);
         }
       });
 
-      pendingPreviewUrlsRef.current = {};
+      pendingPreviewUrlsRef.current =
+        {};
     };
   }, []);
 
@@ -728,6 +930,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   const refreshPage = async () => {
     setErrorMessage("");
+
     await fetchProgetto();
     await fetchTasks();
     await fetchUtenti();
@@ -739,65 +942,74 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const fetchTaskDetailsExtra = async (
-    taskId
-  ) => {
-    if (!taskId) return;
+  const fetchTaskDetailsExtra =
+    async (taskId) => {
+      if (!taskId) return;
 
-    try {
-      const {
-        data: notesData,
-        error: notesError,
-      } = await supabase
-        .from("task_note")
-        .select(`
-          *,
-          profili (
-            id,
-            nome,
-            cognome
+      try {
+        const {
+          data: notesData,
+          error: notesError,
+        } = await supabase
+          .from("task_note")
+          .select(`
+            *,
+            profili (
+              id,
+              nome,
+              cognome
+            )
+          `)
+          .eq(
+            "task_id",
+            taskId
           )
-        `)
-        .eq("task_id", taskId)
-        .order("created_at", {
-          ascending: true,
-        });
+          .order("created_at", {
+            ascending: true,
+          });
 
-      if (notesError) {
+        if (notesError) {
+          console.error(
+            "Errore caricamento note:",
+            notesError
+          );
+        }
+
+        setNoteList(
+          notesData || []
+        );
+
+        const {
+          data: filesData,
+          error: filesError,
+        } = await supabase
+          .from("task_allegati")
+          .select("*")
+          .eq(
+            "task_id",
+            taskId
+          )
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (filesError) {
+          console.error(
+            "Errore caricamento allegati:",
+            filesError
+          );
+        }
+
+        setAllegatiList(
+          filesData || []
+        );
+      } catch (error) {
         console.error(
-          "Errore caricamento note:",
-          notesError
+          "Errore fetchTaskDetailsExtra:",
+          error
         );
       }
-
-      setNoteList(notesData || []);
-
-      const {
-        data: filesData,
-        error: filesError,
-      } = await supabase
-        .from("task_allegati")
-        .select("*")
-        .eq("task_id", taskId)
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (filesError) {
-        console.error(
-          "Errore caricamento allegati:",
-          filesError
-        );
-      }
-
-      setAllegatiList(filesData || []);
-    } catch (error) {
-      console.error(
-        "Errore fetchTaskDetailsExtra:",
-        error
-      );
-    }
-  };
+    };
 
   /*
    * ============================================================
@@ -805,8 +1017,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const getPriorityBadge = (task) => {
-    const val = (task.priorita || "")
+  const getPriorityBadge = (
+    task
+  ) => {
+    const val = (
+      task.priorita || ""
+    )
       .toString()
       .trim()
       .toLowerCase();
@@ -851,8 +1067,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const getStatusBadgeStyle = (stato) => {
-    switch (normalizeStatus(stato)) {
+  const getStatusBadgeStyle = (
+    stato
+  ) => {
+    switch (
+      normalizeStatus(stato)
+    ) {
       case "done":
       case "completato":
       case "completed":
@@ -870,19 +1090,28 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   /*
    * ============================================================
-   * APERTURA MODALE MODIFICA
+   * APERTURA MODALE
    * ============================================================
    */
 
-  const handleRowClick = async (task) => {
+  const handleRowClick = async (
+    task
+  ) => {
     const isAssigned =
       task.task_profili?.some(
         (tp) =>
-          String(tp.profili?.id) ===
-          String(currentProfileId)
+          String(
+            tp.profili?.id
+          ) ===
+          String(
+            currentProfileId
+          )
       );
 
-    if (!isAssigned && !isAdmin) {
+    if (
+      !isAssigned &&
+      !isAdmin
+    ) {
       alert(
         "Non hai i permessi per modificare questo task."
       );
@@ -895,14 +1124,19 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
     setFormData({
       titolo: task.titolo || "",
-      descrizione: task.descrizione || "",
-      scadenza: formatDateInput(
-        task.scadenza
-      ),
+      descrizione:
+        task.descrizione || "",
+      scadenza:
+        formatDateInput(
+          task.scadenza
+        ),
       priorita:
-        task.priorita || "Media",
-      progetto_id: progettoId || "",
-      stato: task.stato || "todo",
+        task.priorita ||
+        "Media",
+      progetto_id:
+        progettoId || "",
+      stato:
+        task.stato || "todo",
     });
 
     setSelectedProfili(
@@ -933,28 +1167,29 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const handleOpenCreateModal = () => {
-    clearPendingFiles();
+  const handleOpenCreateModal =
+    () => {
+      clearPendingFiles();
 
-    setSelectedTask(null);
+      setSelectedTask(null);
 
-    setFormData({
-      titolo: "",
-      descrizione: "",
-      scadenza: "",
-      priorita: "Media",
-      progetto_id:
-        progettoId || "",
-      stato: "todo",
-    });
+      setFormData({
+        titolo: "",
+        descrizione: "",
+        scadenza: "",
+        priorita: "Media",
+        progetto_id:
+          progettoId || "",
+        stato: "todo",
+      });
 
-    setSelectedProfili([]);
-    setNoteList([]);
-    setAllegatiList([]);
-    setNuovaNota("");
+      setSelectedProfili([]);
+      setNoteList([]);
+      setAllegatiList([]);
+      setNuovaNota("");
 
-    setIsModalOpen(true);
-  };
+      setIsModalOpen(true);
+    };
 
   /*
    * ============================================================
@@ -1004,71 +1239,64 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const handlePendingFileSelect = (
-    event
-  ) => {
-    const files = Array.from(
-      event.target.files || []
-    );
+  const handlePendingFileSelect =
+    (event) => {
+      const files = Array.from(
+        event.target.files || []
+      );
 
-    if (files.length > 0) {
-      setPendingFiles((prev) => [
-        ...prev,
-        ...files,
-      ]);
+      if (files.length > 0) {
+        setPendingFiles((prev) => [
+          ...prev,
+          ...files,
+        ]);
 
-      files.forEach((file) => {
-        if (!isImageFile(file)) {
-          return;
-        }
+        files.forEach((file) => {
+          if (!isImageFile(file)) {
+            return;
+          }
 
-        const previewKey =
-          getPendingFileKey(file);
+          const previewKey =
+            getPendingFileKey(
+              file
+            );
 
-        const previewUrl =
-          URL.createObjectURL(
-            file
+          const previewUrl =
+            URL.createObjectURL(
+              file
+            );
+
+          const previousUrl =
+            pendingPreviewUrlsRef
+              .current?.[
+              previewKey
+            ];
+
+          if (previousUrl) {
+            URL.revokeObjectURL(
+              previousUrl
+            );
+          }
+
+          pendingPreviewUrlsRef.current =
+            {
+              ...pendingPreviewUrlsRef.current,
+              [previewKey]:
+                previewUrl,
+            };
+
+          setPendingPreviewUrls(
+            (prev) => ({
+              ...prev,
+              [previewKey]:
+                previewUrl,
+            })
           );
+        });
+      }
 
-        /*
-         * Se per qualche motivo esiste già
-         * un preview con la stessa chiave,
-         * revociamo quello precedente.
-         */
-        const previousUrl =
-          pendingPreviewUrlsRef
-            .current?.[
-            previewKey
-          ];
-
-        if (previousUrl) {
-          URL.revokeObjectURL(
-            previousUrl
-          );
-        }
-
-        pendingPreviewUrlsRef.current =
-          {
-            ...pendingPreviewUrlsRef.current,
-            [previewKey]:
-              previewUrl,
-          };
-
-        setPendingPreviewUrls(
-          (prev) => ({
-            ...prev,
-            [previewKey]:
-              previewUrl,
-          })
-        );
-      });
-    }
-
-    /*
-     * Permette di riselezionare lo stesso file.
-     */
-    event.target.value = null;
-  };
+      event.target.value = null;
+    };
 
   const removePendingFile = (
     indexToRemove
@@ -1132,7 +1360,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
   ) => {
     event.preventDefault();
 
-    if (!formData.titolo.trim()) {
+    if (
+      !formData.titolo.trim()
+    ) {
       alert(
         "Inserisci almeno il titolo del task."
       );
@@ -1142,7 +1372,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } =
+        await supabase.auth.getUser();
 
       const creatorId =
         currentProfileId ||
@@ -1176,9 +1407,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       let targetTaskId = null;
 
       /*
-       * --------------------------------------------------------
        * MODIFICA
-       * --------------------------------------------------------
        */
 
       if (selectedTask) {
@@ -1205,13 +1434,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         const {
           error:
             deleteAssignmentError,
-        } = await supabase
-          .from("task_profili")
-          .delete()
-          .eq(
-            "task_id",
-            targetTaskId
-          );
+        } =
+          await supabase
+            .from(
+              "task_profili"
+            )
+            .delete()
+            .eq(
+              "task_id",
+              targetTaskId
+            );
 
         if (
           deleteAssignmentError
@@ -1224,9 +1456,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       }
 
       /*
-       * --------------------------------------------------------
        * CREAZIONE
-       * --------------------------------------------------------
        */
 
       else {
@@ -1238,11 +1468,14 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         const {
           data: newTask,
           error: insertError,
-        } = await supabase
-          .from("task")
-          .insert([payload])
-          .select("*")
-          .single();
+        } =
+          await supabase
+            .from("task")
+            .insert([
+              payload,
+            ])
+            .select("*")
+            .single();
 
         if (insertError) {
           alert(
@@ -1256,9 +1489,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       }
 
       /*
-       * --------------------------------------------------------
        * NUOVE ASSEGNAZIONI
-       * --------------------------------------------------------
        */
 
       if (
@@ -1279,11 +1510,14 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         const {
           error:
             assignmentError,
-        } = await supabase
-          .from("task_profili")
-          .insert(
-            assegnazioni
-          );
+        } =
+          await supabase
+            .from(
+              "task_profili"
+            )
+            .insert(
+              assegnazioni
+            );
 
         if (assignmentError) {
           console.error(
@@ -1291,12 +1525,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             assignmentError
           );
         }
-
-        /*
-         * ------------------------------------------------------
-         * NOTIFICHE
-         * ------------------------------------------------------
-         */
 
         const notifiche =
           selectedProfili.map(
@@ -1319,11 +1547,14 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         const {
           error:
             notificationError,
-        } = await supabase
-          .from("notifiche")
-          .insert(
-            notifiche
-          );
+        } =
+          await supabase
+            .from(
+              "notifiche"
+            )
+            .insert(
+              notifiche
+            );
 
         if (notificationError) {
           console.warn(
@@ -1334,9 +1565,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       }
 
       /*
-       * --------------------------------------------------------
        * UPLOAD FILE NUOVI
-       * --------------------------------------------------------
        */
 
       if (
@@ -1346,7 +1575,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         for (const file of pendingFiles) {
           try {
             const fileExt =
-              file.name.includes(".")
+              file.name.includes(
+                "."
+              )
                 ? file.name
                     .split(".")
                     .pop()
@@ -1369,14 +1600,15 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
             const {
               error: uploadError,
-            } = await supabase.storage
-              .from(
-                "task-attachments"
-              )
-              .upload(
-                filePath,
-                file
-              );
+            } =
+              await supabase.storage
+                .from(
+                  "task-attachments"
+                )
+                .upload(
+                  filePath,
+                  file
+                );
 
             if (uploadError) {
               console.error(
@@ -1404,25 +1636,26 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               const {
                 error:
                   attachmentError,
-              } = await supabase
-                .from(
-                  "task_allegati"
-                )
-                .insert([
-                  {
-                    task_id:
-                      targetTaskId,
+              } =
+                await supabase
+                  .from(
+                    "task_allegati"
+                  )
+                  .insert([
+                    {
+                      task_id:
+                        targetTaskId,
 
-                    nome_file:
-                      file.name,
+                      nome_file:
+                        file.name,
 
-                    url_file:
-                      publicUrlData.publicUrl,
+                      url_file:
+                        publicUrlData.publicUrl,
 
-                    tipo_file:
-                      file.type,
-                  },
-                ]);
+                      tipo_file:
+                        file.type,
+                    },
+                  ]);
 
               if (
                 attachmentError
@@ -1441,12 +1674,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           }
         }
       }
-
-      /*
-       * --------------------------------------------------------
-       * CHIUSURA
-       * --------------------------------------------------------
-       */
 
       clearPendingFiles();
 
@@ -1485,18 +1712,26 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     const isAssigned =
       task.task_profili?.some(
         (tp) =>
-          String(tp.profili?.id) ===
-          String(currentProfileId)
+          String(
+            tp.profili?.id
+          ) ===
+          String(
+            currentProfileId
+          )
       );
 
-    if (!isAssigned && !isAdmin) {
+    if (
+      !isAssigned &&
+      !isAdmin
+    ) {
       alert(
         "Non puoi modificare questo task."
       );
       return;
     }
 
-    const previousTasks = tasks;
+    const previousTasks =
+      tasks;
 
     setTasks((prev) =>
       prev.map((item) =>
@@ -1515,7 +1750,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         .update({
           stato: newStatus,
         })
-        .eq("id", task.id);
+        .eq(
+          "id",
+          task.id
+        );
 
     if (error) {
       console.error(
@@ -1539,50 +1777,52 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const handleDeleteTask = async (
-    taskId
-  ) => {
-    if (!isAdmin) {
-      alert(
-        "Solo un amministratore può eliminare un task."
-      );
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        "Sei sicuro di voler eliminare questo task?"
-      );
-
-    if (!confirmed) return;
-
-    try {
-      const { error } =
-        await supabase
-          .from("task")
-          .delete()
-          .eq("id", taskId);
-
-      if (error) {
+  const handleDeleteTask =
+    async (taskId) => {
+      if (!isAdmin) {
         alert(
-          `Errore durante l'eliminazione: ${error.message}`
+          "Solo un amministratore può eliminare un task."
         );
         return;
       }
 
-      clearPendingFiles();
+      const confirmed =
+        window.confirm(
+          "Sei sicuro di voler eliminare questo task?"
+        );
 
-      setIsModalOpen(false);
-      setSelectedTask(null);
+      if (!confirmed) return;
 
-      await fetchTasks();
-    } catch (error) {
-      console.error(
-        "Errore eliminazione:",
-        error
-      );
-    }
-  };
+      try {
+        const { error } =
+          await supabase
+            .from("task")
+            .delete()
+            .eq(
+              "id",
+              taskId
+            );
+
+        if (error) {
+          alert(
+            `Errore durante l'eliminazione: ${error.message}`
+          );
+          return;
+        }
+
+        clearPendingFiles();
+
+        setIsModalOpen(false);
+        setSelectedTask(null);
+
+        await fetchTasks();
+      } catch (error) {
+        console.error(
+          "Errore eliminazione:",
+          error
+        );
+      }
+    };
 
   /*
    * ============================================================
@@ -1641,116 +1881,126 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   /*
    * ============================================================
-   * UPLOAD FILE SU TASK ESISTENTE
+   * UPLOAD FILE TASK ESISTENTE
    * ============================================================
    */
 
-  const handleFileUpload = async (
-    event
-  ) => {
-    const file =
-      event.target.files?.[0];
-
-    if (!file || !selectedTask) {
-      return;
-    }
-
-    setUploadingFile(true);
-
-    try {
-      const fileExt =
-        file.name.includes(".")
-          ? file.name
-              .split(".")
-              .pop()
-          : "";
-
-      const fileName =
-        `${Math.random()
-          .toString(36)
-          .substring(2)}_${Date.now()}${
-          fileExt
-            ? `.${fileExt}`
-            : ""
-        }`;
-
-      const filePath =
-        `${selectedTask.id}/${fileName}`;
-
-      const {
-        error: uploadError,
-      } = await supabase.storage
-        .from(
-          "task-attachments"
-        )
-        .upload(
-          filePath,
-          file
-        );
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const {
-        data: publicUrlData,
-      } =
-        supabase.storage
-          .from(
-            "task-attachments"
-          )
-          .getPublicUrl(
-            filePath
-          );
+  const handleFileUpload =
+    async (event) => {
+      const file =
+        event.target.files?.[0];
 
       if (
-        !publicUrlData?.publicUrl
+        !file ||
+        !selectedTask
       ) {
-        throw new Error(
-          "URL pubblico del file non disponibile."
+        return;
+      }
+
+      setUploadingFile(true);
+
+      try {
+        const fileExt =
+          file.name.includes(
+            "."
+          )
+            ? file.name
+                .split(".")
+                .pop()
+            : "";
+
+        const fileName =
+          `${Math.random()
+            .toString(36)
+            .substring(2)}_${Date.now()}${
+            fileExt
+              ? `.${fileExt}`
+              : ""
+          }`;
+
+        const filePath =
+          `${selectedTask.id}/${fileName}`;
+
+        const {
+          error: uploadError,
+        } =
+          await supabase.storage
+            .from(
+              "task-attachments"
+            )
+            .upload(
+              filePath,
+              file
+            );
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const {
+          data:
+            publicUrlData,
+        } =
+          supabase.storage
+            .from(
+              "task-attachments"
+            )
+            .getPublicUrl(
+              filePath
+            );
+
+        if (
+          !publicUrlData?.publicUrl
+        ) {
+          throw new Error(
+            "URL pubblico del file non disponibile."
+          );
+        }
+
+        const {
+          error: dbError,
+        } =
+          await supabase
+            .from(
+              "task_allegati"
+            )
+            .insert([
+              {
+                task_id:
+                  selectedTask.id,
+
+                nome_file:
+                  file.name,
+
+                url_file:
+                  publicUrlData.publicUrl,
+
+                tipo_file:
+                  file.type,
+              },
+            ]);
+
+        if (dbError) {
+          throw dbError;
+        }
+
+        await fetchTaskDetailsExtra(
+          selectedTask.id
         );
+      } catch (error) {
+        console.error(
+          "Errore upload file:",
+          error
+        );
+
+        alert(
+          `Errore durante il caricamento del file: ${error.message}`
+        );
+      } finally {
+        setUploadingFile(false);
+        event.target.value = null;
       }
-
-      const { error: dbError } =
-        await supabase
-          .from("task_allegati")
-          .insert([
-            {
-              task_id:
-                selectedTask.id,
-
-              nome_file:
-                file.name,
-
-              url_file:
-                publicUrlData.publicUrl,
-
-              tipo_file:
-                file.type,
-            },
-          ]);
-
-      if (dbError) {
-        throw dbError;
-      }
-
-      await fetchTaskDetailsExtra(
-        selectedTask.id
-      );
-    } catch (error) {
-      console.error(
-        "Errore upload file:",
-        error
-      );
-
-      alert(
-        `Errore durante il caricamento del file: ${error.message}`
-      );
-    } finally {
-      setUploadingFile(false);
-      event.target.value = null;
-    }
-  };
+    };
 
   /*
    * ============================================================
@@ -1983,7 +2233,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
       const { error } =
         await supabase
-          .from("task_profili")
+          .from(
+            "task_profili"
+          )
           .insert([
             {
               task_id: taskId,
@@ -2001,22 +2253,23 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
       const {
         error: notificationError,
-      } = await supabase
-        .from("notifiche")
-        .insert([
-          {
-            user_id:
-              targetUserId,
+      } =
+        await supabase
+          .from("notifiche")
+          .insert([
+            {
+              user_id:
+                targetUserId,
 
-            titolo:
-              "Task assegnato",
+              titolo:
+                "Task assegnato",
 
-            messaggio:
-              `Ti è stato assegnato il task "${taskTitolo}".`,
+              messaggio:
+                `Ti è stato assegnato il task "${taskTitolo}".`,
 
-            letta: false,
-          },
-        ]);
+              letta: false,
+            },
+          ]);
 
       if (notificationError) {
         console.warn(
@@ -2034,7 +2287,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   /*
    * ============================================================
-   * FILTRI
+   * FILTRI TASK
    * ============================================================
    */
 
@@ -2042,6 +2295,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
     useMemo(() => {
       return tasks.filter(
         (task) => {
+          /*
+           * ----------------------------------------------------
+           * PERMESSI
+           * ----------------------------------------------------
+           */
+
           if (!isAdmin) {
             const isAssigned =
               task.task_profili?.some(
@@ -2058,6 +2317,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               return false;
             }
           }
+
+          /*
+           * ----------------------------------------------------
+           * RICERCA
+           * ----------------------------------------------------
+           */
 
           const ricerca =
             searchTerm
@@ -2087,6 +2352,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               .toLowerCase() ||
             "";
 
+          const creatore =
+            task.creatore
+              ? `${task.creatore.nome || ""} ${
+                  task.creatore.cognome ||
+                  ""
+                }`
+                  .trim()
+                  .toLowerCase()
+              : "";
+
           const matchesSearch =
             !ricerca ||
             titolo.includes(
@@ -2097,46 +2372,309 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             ) ||
             assegnati.includes(
               ricerca
+            ) ||
+            creatore.includes(
+              ricerca
             );
 
           if (!matchesSearch) {
             return false;
           }
 
+          /*
+           * ----------------------------------------------------
+           * FILTRO RAPIDO
+           * ----------------------------------------------------
+           */
+
           if (
             priorityFilter ===
             "Miei"
           ) {
-            return task.task_profili?.some(
-              (tp) =>
-                String(
-                  tp.profili?.id
-                ) ===
-                String(
-                  currentProfileId
-                )
-            );
+            const isMine =
+              task.task_profili?.some(
+                (tp) =>
+                  String(
+                    tp.profili?.id
+                  ) ===
+                  String(
+                    currentProfileId
+                  )
+              );
+
+            if (!isMine) {
+              return false;
+            }
           }
 
           if (
-            priorityFilter ===
-            "Tutti"
+            priorityFilter !==
+              "Miei" &&
+            priorityFilter !==
+              "Tutti"
           ) {
-            return true;
+            const taskPriority =
+              (
+                task.priorita ||
+                ""
+              )
+                .toString()
+                .trim()
+                .toLowerCase();
+
+            if (
+              taskPriority !==
+              priorityFilter
+                .toLowerCase()
+                .trim()
+            ) {
+              return false;
+            }
           }
 
-          return (
-            (
-              task.priorita ||
-              ""
-            )
-              .toString()
-              .trim()
-              .toLowerCase() ===
-            priorityFilter
-              .toLowerCase()
-              .trim()
-          );
+          /*
+           * ----------------------------------------------------
+           * ASSEGNATO A
+           * ----------------------------------------------------
+           */
+
+          if (
+            taskFilters.assegnatoA
+          ) {
+            const isAssignedTo =
+              task.task_profili?.some(
+                (tp) =>
+                  String(
+                    tp.profili?.id
+                  ) ===
+                  String(
+                    taskFilters.assegnatoA
+                  )
+              );
+
+            if (!isAssignedTo) {
+              return false;
+            }
+          }
+
+          /*
+           * ----------------------------------------------------
+           * ASSEGNATO DA
+           * ----------------------------------------------------
+           */
+
+          if (
+            taskFilters.assegnatoDa
+          ) {
+            if (
+              String(
+                task.creatore?.id
+              ) !==
+              String(
+                taskFilters.assegnatoDa
+              )
+            ) {
+              return false;
+            }
+          }
+
+          /*
+           * ----------------------------------------------------
+           * PRIORITÀ
+           * ----------------------------------------------------
+           */
+
+          if (
+            taskFilters.priorita
+          ) {
+            const taskPriority =
+              (
+                task.priorita ||
+                ""
+              )
+                .toString()
+                .trim()
+                .toLowerCase();
+
+            if (
+              taskPriority !==
+              taskFilters.priorita
+                .toLowerCase()
+                .trim()
+            ) {
+              return false;
+            }
+          }
+
+          /*
+           * ----------------------------------------------------
+           * STATO
+           * ----------------------------------------------------
+           */
+
+          if (
+            taskFilters.stato
+          ) {
+            const taskStatus =
+              normalizeStatus(
+                task.stato
+              );
+
+            const filterStatus =
+              normalizeStatus(
+                taskFilters.stato
+              );
+
+            if (
+              taskStatus !==
+              filterStatus
+            ) {
+              return false;
+            }
+          }
+
+          /*
+           * ----------------------------------------------------
+           * SCADENZA
+           * ----------------------------------------------------
+           */
+
+          if (
+            taskFilters.scadenza
+          ) {
+            /*
+             * SENZA SCADENZA
+             */
+
+            if (
+              taskFilters.scadenza ===
+              "senza_scadenza"
+            ) {
+              if (
+                task.scadenza
+              ) {
+                return false;
+              }
+            }
+
+            /*
+             * CON SCADENZA
+             */
+
+            else {
+              if (
+                !task.scadenza
+              ) {
+                return false;
+              }
+
+              const today =
+                new Date();
+
+              today.setHours(
+                0,
+                0,
+                0,
+                0
+              );
+
+              const dueDate =
+                new Date(
+                  task.scadenza
+                );
+
+              dueDate.setHours(
+                0,
+                0,
+                0,
+                0
+              );
+
+              switch (
+                taskFilters.scadenza
+              ) {
+                case "scaduti":
+                  if (
+                    isDone(
+                      task
+                    ) ||
+                    dueDate >=
+                      today
+                  ) {
+                    return false;
+                  }
+
+                  break;
+
+                case "oggi":
+                  if (
+                    dueDate.getTime() !==
+                    today.getTime()
+                  ) {
+                    return false;
+                  }
+
+                  break;
+
+                case "3_giorni": {
+                  const threeDays =
+                    new Date(
+                      today.getTime() +
+                        3 *
+                          24 *
+                          60 *
+                          60 *
+                          1000
+                    );
+
+                  if (
+                    isDone(
+                      task
+                    ) ||
+                    dueDate <
+                      today ||
+                    dueDate >
+                      threeDays
+                  ) {
+                    return false;
+                  }
+
+                  break;
+                }
+
+                case "7_giorni": {
+                  const sevenDays =
+                    new Date(
+                      today.getTime() +
+                        7 *
+                          24 *
+                          60 *
+                          60 *
+                          1000
+                    );
+
+                  if (
+                    isDone(
+                      task
+                    ) ||
+                    dueDate <
+                      today ||
+                    dueDate >
+                      sevenDays
+                  ) {
+                    return false;
+                  }
+
+                  break;
+                }
+
+                default:
+                  break;
+              }
+            }
+          }
+
+          return true;
         }
       );
     }, [
@@ -2145,6 +2683,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       currentProfileId,
       searchTerm,
       priorityFilter,
+      taskFilters,
     ]);
 
   /*
@@ -2164,7 +2703,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
         const doneB =
           isDone(b);
 
-        if (doneA !== doneB) {
+        if (
+          doneA !== doneB
+        ) {
           return doneA ? 1 : -1;
         }
 
@@ -2192,7 +2733,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           ).getTime()
         );
       });
-    }, [tasksFiltrati]);
+    }, [
+      tasksFiltrati,
+    ]);
 
   /*
    * ============================================================
@@ -2200,20 +2743,21 @@ function ProgettoDettaglio({ progettoId, onBack }) {
    * ============================================================
    */
 
-  const filterOptions = isAdmin
-    ? [
-        "Tutti",
-        "Miei",
-        "Alta",
-        "Media",
-        "Bassa",
-      ]
-    : [
-        "Miei",
-        "Alta",
-        "Media",
-        "Bassa",
-      ];
+  const filterOptions =
+    isAdmin
+      ? [
+          "Tutti",
+          "Miei",
+          "Alta",
+          "Media",
+          "Bassa",
+        ]
+      : [
+          "Miei",
+          "Alta",
+          "Media",
+          "Bassa",
+        ];
 
   /*
    * ============================================================
@@ -2309,7 +2853,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
   return (
     <div className="task-page">
-
       {/* ======================================================
           HEADER
       ====================================================== */}
@@ -2322,11 +2865,14 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 type="button"
                 className="task-page-button secondary"
                 onClick={() =>
-                  onBack("projects")
+                  onBack(
+                    "projects"
+                  )
                 }
                 title="Torna ai progetti"
                 style={{
-                  marginRight: "10px",
+                  marginRight:
+                    "10px",
                 }}
               >
                 <i className="bi bi-arrow-left"></i>
@@ -2348,9 +2894,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           </div>
 
           <p>
-            Gestisci attività, scadenze e
-            assegnazioni del team per questo
-            progetto.
+            Gestisci attività,
+            scadenze e
+            assegnazioni del team
+            per questo progetto.
           </p>
         </div>
 
@@ -2387,7 +2934,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           <button
             type="button"
             className="task-page-button secondary"
-            onClick={refreshPage}
+            onClick={
+              refreshPage
+            }
           >
             <i className="bi bi-arrow-clockwise"></i>
             Aggiorna
@@ -2404,13 +2953,15 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           className="alert alert-danger d-flex align-items-center"
           role="alert"
           style={{
-            marginBottom: "20px",
+            marginBottom:
+              "20px",
           }}
         >
           <i
             className="bi bi-exclamation-triangle-fill"
             style={{
-              marginRight: "10px",
+              marginRight:
+                "10px",
             }}
           ></i>
 
@@ -2427,7 +2978,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       <div className="task-metrics-grid">
         <div className="task-metric-card">
           <div>
-            <span>Totale</span>
+            <span>
+              Totale
+            </span>
+
             <strong>
               {totalTasks}
             </strong>
@@ -2440,7 +2994,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
         <div className="task-metric-card">
           <div>
-            <span>In Corso</span>
+            <span>
+              In Corso
+            </span>
+
             <strong className="warning">
               {inProgressTasks}
             </strong>
@@ -2453,7 +3010,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
         <div className="task-metric-card">
           <div>
-            <span>In Scadenza</span>
+            <span>
+              In Scadenza
+            </span>
+
             <strong className="warning">
               {expTasks}
             </strong>
@@ -2466,7 +3026,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
         <div className="task-metric-card">
           <div>
-            <span>Scaduti</span>
+            <span>
+              Scaduti
+            </span>
+
             <strong className="danger">
               {overdueTasks}
             </strong>
@@ -2479,7 +3042,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
         <div className="task-metric-card">
           <div>
-            <span>Completati</span>
+            <span>
+              Completati
+            </span>
 
             <strong className="success">
               {doneTasks}
@@ -2505,7 +3070,7 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
         <input
           type="text"
-          placeholder="Cerca task..."
+          placeholder="Cerca task, descrizione, assegnatario o creatore..."
           value={searchTerm}
           onChange={(event) =>
             setSearchTerm(
@@ -2516,51 +3081,170 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       </div>
 
       {/* ======================================================
-          FILTRI
+          FILTRI RAPIDI
       ====================================================== */}
 
       <div className="task-filters">
-        {filterOptions.map(
-          (filter) => {
-            let label = filter;
+        {filterOptions.map((filter) => {
+          let label = filter;
 
-            if (filter === "Tutti") {
-              label = "Tutti i Task";
-            }
+          if (filter === "Tutti") label = "Tutti i Task";
+          if (filter === "Miei") label = "I Miei Task";
+          if (!["Tutti", "Miei"].includes(filter)) {
+            label = `Priorità ${filter}`;
+          }
 
-            if (filter === "Miei") {
-              label = "I Miei Task";
-            }
+          return (
+            <button
+              key={filter}
+              type="button"
+              className={
+                priorityFilter === filter
+                  ? "task-filter active"
+                  : "task-filter"
+              }
+              onClick={() => setPriorityFilter(filter)}
+            >
+              {label}
+            </button>
+          );
+        })}
 
-            if (
-              filter !== "Tutti" &&
-              filter !== "Miei"
-            ) {
-              label = `Priorità ${filter}`;
-            }
+        <button
+          type="button"
+          className={
+            filtersOpen
+              ? "task-filter advanced active"
+              : "task-filter advanced"
+          }
+          onClick={() => setFiltersOpen((prev) => !prev)}
+        >
+          <i className="bi bi-sliders" />
+          Filtri avanzati
 
-            return (
-              <button
-                key={filter}
-                type="button"
-                className={
-                  priorityFilter ===
-                  filter
-                    ? "task-filter active"
-                    : "task-filter"
-                }
-                onClick={() =>
-                  setPriorityFilter(
-                    filter
-                  )
+          {hasAdvancedFilters && (
+            <span className="task-filter-count">
+              {Object.values(taskFilters).filter(Boolean).length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ======================================================
+          FILTRI AVANZATI
+      ====================================================== */}
+
+      {filtersOpen && (
+        <div className="task-advanced-filters">
+          <div className="task-advanced-filters-header">
+            <div>
+              <strong>Filtri avanzati</strong>
+              <span>
+                Combina più filtri per restringere i risultati.
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="task-filter-reset"
+              onClick={resetTaskFilters}
+            >
+              <i className="bi bi-arrow-counterclockwise" />
+              Azzera filtri
+            </button>
+          </div>
+
+          <div className="task-filter-grid">
+            <div className="task-filter-field">
+              <label>Assegnato a</label>
+              <select
+                value={taskFilters.assegnatoA}
+                onChange={(e) =>
+                  updateTaskFilter("assegnatoA", e.target.value)
                 }
               >
-                {label}
-              </button>
-            );
-          }
-        )}
-      </div>
+                <option value="">Tutti gli utenti</option>
+                {utenti.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome} {u.cognome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="task-filter-field">
+              <label>Assegnato da</label>
+              <select
+                value={taskFilters.assegnatoDa}
+                onChange={(e) =>
+                  updateTaskFilter("assegnatoDa", e.target.value)
+                }
+              >
+                <option value="">Tutti gli utenti</option>
+                {utenti.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome} {u.cognome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="task-filter-field">
+              <label>Priorità</label>
+              <select
+                value={taskFilters.priorita}
+                onChange={(e) =>
+                  updateTaskFilter("priorita", e.target.value)
+                }
+              >
+                <option value="">Tutte</option>
+                <option value="Alta">Alta</option>
+                <option value="Media">Media</option>
+                <option value="Bassa">Bassa</option>
+              </select>
+            </div>
+
+            <div className="task-filter-field">
+              <label>Stato</label>
+              <select
+                value={taskFilters.stato}
+                onChange={(e) =>
+                  updateTaskFilter("stato", e.target.value)
+                }
+              >
+                <option value="">Tutti</option>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In corso</option>
+                <option value="done">Completato</option>
+              </select>
+            </div>
+
+            <div className="task-filter-field">
+              <label>Scadenza</label>
+              <select
+                value={taskFilters.scadenza}
+                onChange={(e) =>
+                  updateTaskFilter("scadenza", e.target.value)
+                }
+              >
+                <option value="">Qualsiasi</option>
+                <option value="scaduti">Scaduti</option>
+                <option value="oggi">Oggi</option>
+                <option value="3_giorni">Prossimi 3 giorni</option>
+                <option value="7_giorni">Prossimi 7 giorni</option>
+                <option value="senza_scadenza">Senza scadenza</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="task-advanced-filters-footer">
+            <span>
+              <strong>{tasksFiltrati.length}</strong>{" "}
+              task corrispondenti
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================
           TABELLA
@@ -2577,7 +3261,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             </span>
           </div>
         </div>
-      ) : tasksOrdinati.length === 0 ? (
+      ) : tasksOrdinati.length ===
+        0 ? (
         <div className="task-empty">
           <i className="bi bi-inbox"></i>
 
@@ -2586,9 +3271,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           </strong>
 
           <span>
-            Non ci sono attività che
-            corrispondono ai filtri
-            selezionati.
+            Non ci sono attività
+            che corrispondono ai
+            filtri selezionati.
           </span>
 
           {isAdmin && (
@@ -2599,11 +3284,13 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 handleOpenCreateModal
               }
               style={{
-                marginTop: "15px",
+                marginTop:
+                  "15px",
               }}
             >
               <i className="bi bi-plus"></i>
-              Crea il primo task
+              Crea il primo
+              task
             </button>
           )}
         </div>
@@ -2612,13 +3299,27 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           <table className="task-table">
             <thead>
               <tr>
-                <th>Titolo</th>
-                <th>Progetto</th>
-                <th>Priorità</th>
-                <th>Assegnato da</th>
-                <th>Assegnato a</th>
-                <th>Scadenza</th>
-                <th>Stato</th>
+                <th>
+                  Titolo
+                </th>
+                <th>
+                  Progetto
+                </th>
+                <th>
+                  Priorità
+                </th>
+                <th>
+                  Assegnato da
+                </th>
+                <th>
+                  Assegnato a
+                </th>
+                <th>
+                  Scadenza
+                </th>
+                <th>
+                  Stato
+                </th>
               </tr>
             </thead>
 
@@ -2629,7 +3330,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                     task.task_profili?.some(
                       (tp) =>
                         String(
-                          tp.profili?.id
+                          tp
+                            .profili
+                            ?.id
                         ) ===
                         String(
                           currentProfileId
@@ -2642,7 +3345,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
                   return (
                     <tr
-                      key={task.id}
+                      key={
+                        task.id
+                      }
                       onClick={() =>
                         handleRowClick(
                           task
@@ -2655,11 +3360,11 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                             : "default",
                       }}
                     >
-                      {/* TITOLO */}
-
                       <td>
                         <strong>
-                          {task.titolo}
+                          {
+                            task.titolo
+                          }
                         </strong>
 
                         {task.descrizione && (
@@ -2671,22 +3376,21 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                         )}
                       </td>
 
-                      {/* PROGETTO */}
-
                       <td>
                         {nomeProgetto ? (
                           <span className="task-project">
                             <i className="bi bi-folder2"></i>
-                            {nomeProgetto}
+                            {
+                              nomeProgetto
+                            }
                           </span>
                         ) : (
                           <span className="task-no-project">
-                            Nessun progetto
+                            Nessun
+                            progetto
                           </span>
                         )}
                       </td>
-
-                      {/* PRIORITÀ */}
 
                       <td>
                         {getPriorityBadge(
@@ -2694,22 +3398,20 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                         )}
                       </td>
 
-                      {/* CREATORE */}
-
                       <td>
                         <span className="task-creator">
                           {task.creatore
                             ? `${task.creatore.nome || ""} ${
-                                task.creatore.cognome || ""
+                                task.creatore.cognome ||
+                                ""
                               }`.trim()
                             : "-"}
                         </span>
                       </td>
 
-                      {/* ASSEGNATARI */}
-
                       <td>
-                        {task.task_profili
+                        {task
+                          .task_profili
                           ?.length >
                         0 ? (
                           <div className="task-assignees">
@@ -2743,10 +3445,14 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                                   >
                                     <i className="bi bi-person"></i>
 
-                                    {profile?.nome ||
-                                      ""}{" "}
-                                    {profile?.cognome ||
-                                      ""}
+                                    {
+                                      profile?.nome ||
+                                      ""
+                                    }{" "}
+                                    {
+                                      profile?.cognome ||
+                                      ""
+                                    }
 
                                     {isMe &&
                                       " (Tu)"}
@@ -2762,18 +3468,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                         )}
                       </td>
 
-                      {/* SCADENZA */}
-
                       <td>
                         {formatDate(
                           task.scadenza
                         )}
                       </td>
 
-                      {/* STATO */}
-
                       <td
-                        onClick={(event) =>
+                        onClick={(
+                          event
+                        ) =>
                           event.stopPropagation()
                         }
                       >
@@ -2853,12 +3557,15 @@ function ProgettoDettaglio({ progettoId, onBack }) {
 
               <div>
                 <h3>
-                  Gestione e Candidati Task
+                  Gestione e
+                  Candidati Task
                 </h3>
 
                 <p>
-                  Individua i task critici
-                  e i membri disponibili.
+                  Individua i
+                  task critici e
+                  i membri
+                  disponibili.
                 </p>
               </div>
             </div>
@@ -2874,9 +3581,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 value={
                   balanceRole
                 }
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setBalanceRole(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
               >
@@ -2886,8 +3596,12 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                     index
                   ) => (
                     <option
-                      key={index}
-                      value={role}
+                      key={
+                        index
+                      }
+                      value={
+                        role
+                      }
                     >
                       {role ===
                       "Tutti"
@@ -2908,31 +3622,37 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 value={
                   balanceScope
                 }
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setBalanceScope(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
               >
                 <option value="scaduti">
-                  Solo task già scaduti
+                  Solo task già
+                  scaduti
                 </option>
 
                 <option value="in_scadenza">
-                  Task in scadenza
-                  (3 giorni)
+                  Task in
+                  scadenza (3
+                  giorni)
                 </option>
 
                 <option value="tutti">
-                  Tutti i task aperti
+                  Tutti i task
+                  aperti
                 </option>
               </select>
             </div>
           </div>
 
           <div className="task-balance-title">
-            Task filtrati e membri
-            candidati (
+            Task filtrati e
+            membri candidati (
             {
               modalTaskList.length
             }
@@ -2942,8 +3662,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
           {modalTaskList.length ===
           0 ? (
             <div className="task-balance-empty">
-              Nessun task risponde ai
-              filtri selezionati.
+              Nessun task
+              risponde ai filtri
+              selezionati.
             </div>
           ) : (
             <div className="task-balance-list">
@@ -2953,12 +3674,16 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                   candidate,
                 }) => (
                   <div
-                    key={task.id}
+                    key={
+                      task.id
+                    }
                     className="task-balance-item"
                   >
                     <div>
                       <strong>
-                        {task.titolo}
+                        {
+                          task.titolo
+                        }
                       </strong>
 
                       <span>
@@ -2973,7 +3698,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                     <div className="task-balance-candidate">
                       <div>
                         <small>
-                          Candidato ottimale
+                          Candidato
+                          ottimale
                         </small>
 
                         {candidate ? (
@@ -2992,7 +3718,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                           </span>
                         ) : (
                           <span className="task-no-candidate">
-                            Nessuno disponibile
+                            Nessuno
+                            disponibile
                           </span>
                         )}
                       </div>
@@ -3040,11 +3767,17 @@ function ProgettoDettaglio({ progettoId, onBack }) {
       ====================================================== */}
 
       <Modal
-        isOpen={isModalOpen}
+        isOpen={
+          isModalOpen
+        }
         onClose={() => {
           clearPendingFiles();
-          setIsModalOpen(false);
-          setSelectedTask(null);
+          setIsModalOpen(
+            false
+          );
+          setSelectedTask(
+            null
+          );
           setNoteList([]);
           setAllegatiList([]);
           setNuovaNota("");
@@ -3084,8 +3817,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             }
             className="task-create-form"
           >
-            {/* TITOLO */}
-
             <div className="task-form-group">
               <label htmlFor="task-titolo">
                 Titolo{" "}
@@ -3107,11 +3838,10 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               />
             </div>
 
-            {/* PROGETTO */}
-
             <div className="task-form-group">
               <label>
-                Progetto di riferimento
+                Progetto di
+                riferimento
               </label>
 
               <input
@@ -3132,8 +3862,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 readOnly
               />
             </div>
-
-            {/* PRIORITÀ + SCADENZA */}
 
             <div className="task-form-grid">
               <div className="task-form-group">
@@ -3184,8 +3912,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               </div>
             </div>
 
-            {/* STATO */}
-
             <div className="task-form-group">
               <label htmlFor="task-stato">
                 Stato
@@ -3215,8 +3941,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               </select>
             </div>
 
-            {/* MEMBRI */}
-
             <div className="task-form-group">
               <label>
                 Assegna a membri del
@@ -3227,7 +3951,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 {utenti.length ===
                 0 ? (
                   <span className="task-empty-inline">
-                    Nessun membro trovato
+                    Nessun membro
+                    trovato
                   </span>
                 ) : (
                   utenti.map(
@@ -3278,8 +4003,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               </div>
             </div>
 
-            {/* DESCRIZIONE */}
-
             <div className="task-form-group">
               <label htmlFor="task-descrizione">
                 Descrizione
@@ -3298,10 +4021,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 placeholder="Inserisci una descrizione..."
               />
             </div>
-
-            {/* ==================================================
-                ALLEGATI NUOVI
-            ================================================== */}
 
             <div className="task-form-group">
               <label>
@@ -3399,7 +4118,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                   </div>
                 ) : (
                   <span className="task-empty-inline">
-                    Nessun file selezionato.
+                    Nessun file
+                    selezionato.
                   </span>
                 )}
 
@@ -3421,21 +4141,29 @@ function ProgettoDettaglio({ progettoId, onBack }) {
               </div>
             </div>
 
-            {/* BOTTONI */}
-
             <div className="task-modal-actions">
               <button
                 type="button"
                 className="task-page-button danger"
                 onClick={() => {
                   clearPendingFiles();
-                  setIsModalOpen(false);
+
+                  setIsModalOpen(
+                    false
+                  );
+
                   setSelectedTask(
                     null
                   );
+
                   setNoteList([]);
-                  setAllegatiList([]);
-                  setNuovaNota("");
+                  setAllegatiList(
+                    []
+                  );
+
+                  setNuovaNota(
+                    ""
+                  );
                 }}
               >
                 Annulla
@@ -3454,14 +4182,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
             </div>
           </form>
 
-          {/* ==================================================
-              DETTAGLI SOLO MODIFICA
-          ================================================== */}
-
           {selectedTask && (
             <>
-              {/* ALLEGATI */}
-
               <div className="task-detail-section">
                 <span>
                   Allegati (Doc /
@@ -3568,8 +4290,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 </label>
               </div>
 
-              {/* NOTE */}
-
               <div className="task-detail-section">
                 <span>
                   Note e Commenti
@@ -3588,7 +4308,8 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                           <strong>
                             {nota.profili
                               ? `${nota.profili.nome || ""} ${
-                                  nota.profili.cognome || ""
+                                  nota.profili.cognome ||
+                                  ""
                                 }`.trim()
                               : "Utente"}
                           </strong>
@@ -3605,7 +4326,9 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                         </div>
 
                         <p>
-                          {nota.testo}
+                          {
+                            nota.testo
+                          }
                         </p>
                       </div>
                     )
@@ -3648,8 +4371,6 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                 </form>
               </div>
 
-              {/* ELIMINA / CHIUDI */}
-
               <div className="task-modal-actions between">
                 {isAdmin ? (
                   <button
@@ -3673,9 +4394,11 @@ function ProgettoDettaglio({ progettoId, onBack }) {
                   className="task-page-button secondary"
                   onClick={() => {
                     clearPendingFiles();
+
                     setIsModalOpen(
                       false
                     );
+
                     setSelectedTask(
                       null
                     );

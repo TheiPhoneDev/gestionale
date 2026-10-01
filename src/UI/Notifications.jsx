@@ -145,7 +145,7 @@ function NotificheDropdown() {
         onClick={() => setIsOpen(!isOpen)}
         style={{ width: "40px", height: "40px" }}
       >
-        <i className="bi bi-bell-fill fs-5 text-white"></i>
+        <i className="bi bi-bell-fill fs-5 text-primary"></i>
 
         {nonLette > 0 && (
           <span

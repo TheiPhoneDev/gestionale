@@ -1783,3 +1783,287 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   PROGETTO DETTAGLIO - FILTRI AVANZATI
+   ============================================================ */
+
+.task-advanced-filters {
+  width: 100%;
+  margin: 18px 0 24px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.task-advanced-filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.task-advanced-filters-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-advanced-filters-header strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.task-advanced-filters-header strong i {
+  color: #2563eb;
+}
+
+.task-advanced-filters-header span:not(.task-filter-count) {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.task-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 20px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   GRID FILTRI
+   ============================================================ */
+
+.task-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.task-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.task-filter-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-filter-group label i {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.task-filter-group select {
+  width: 100%;
+  height: 42px;
+  padding: 0 36px 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background-color: #ffffff;
+  color: #1f2937;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.task-filter-group select:hover {
+  border-color: #9ca3af;
+}
+
+.task-filter-group select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* ============================================================
+   RESET FILTRI
+   ============================================================ */
+
+.task-filter-reset {
+  justify-content: flex-end;
+}
+
+.task-filter-reset-button {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.task-filter-reset-button:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.task-filter-reset-button i {
+  font-size: 14px;
+}
+
+/* ============================================================
+   FILTRI RAPIDI
+   ============================================================ */
+
+.task-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.task-filter {
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.task-filter:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+}
+
+.task-filter.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+/* ============================================================
+   SEARCH
+   ============================================================ */
+
+.task-search {
+  position: relative;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.task-search > i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.task-search input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px 0 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 14px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.task-search input::placeholder {
+  color: #9ca3af;
+}
+
+.task-search input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1100px) {
+  .task-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .task-advanced-filters {
+    padding: 14px;
+  }
+
+  .task-advanced-filters-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .task-filter-grid {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
+  .task-filter-reset {
+    margin-top: 2px;
+  }
+
+  .task-filter-reset-button {
+    width: 100%;
+  }
+
+  .task-filters {
+    gap: 6px;
+  }
+
+  .task-filter {
+    flex: 1 1 auto;
+  }
+}
